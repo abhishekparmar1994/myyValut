@@ -12,6 +12,9 @@ export const useChatStore = defineStore('chat', () => {
     const loadingMessages = ref(false)
     const users = ref([])
     const blockedUsers = ref([])
+    const pinnedMessage = ref(null)
+    const replyTo = ref(null)
+    const activeUserId = ref(null)
     const blockUpdateTrigger = ref(0)
     const notificationPermission = ref('default')
 
@@ -82,9 +85,12 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('message.received', (message) => {
-            messages.value = [...messages.value, message]
+            // Only push if the message belongs to the active conversation
+            if (activeUserId.value && String(message.senderId) === String(activeUserId.value)) {
+                messages.value = [...messages.value, message]
+            }
             
-            // Show background notification
+            // Show background notification (regardless of active chat)
             if (import.meta.client && document.visibilityState === 'hidden') {
                 const sender = users.value.find(u => String(u.id) === String(message.senderId))
                 const senderName = sender ? sender.name : `User ${message.senderId}`
@@ -119,11 +125,13 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('chat.read', ({ userId }) => {
-            messages.value.forEach(m => {
-                if (m.senderId == auth.user?.id && m.receiverId == userId) {
-                    m.is_read = true
-                }
-            })
+            if (activeUserId.value && String(userId) === String(activeUserId.value)) {
+                messages.value.forEach(m => {
+                    if (m.senderId == auth.user?.id && m.receiverId == userId) {
+                        m.is_read = true
+                    }
+                })
+            }
         })
 
         // Bridges from Laravel (Redis -> Socket -> Client)
@@ -135,7 +143,25 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('system.notification', (payload) => {
-            console.log('System Notification:', payload)
+            console.log('[CHAT STORE] System Notification Received:', payload)
+            
+            // PartnerId check: Is this update relevant to the contact Alice is CURRENTLY talking to?
+            const currentPartner = String(activeUserId.value)
+            const incomingPartner = String(payload.partnerId)
+            
+            if (!activeUserId.value || incomingPartner !== currentPartner) {
+                console.log(`[CHAT STORE] Ignored notification: Active(${currentPartner}) vs Payload(${incomingPartner})`)
+                return
+            }
+
+            if (payload.type === 'reaction_updated') {
+                console.log('[CHAT STORE] Updating reactions for msg:', payload.messageId)
+                const msg = messages.value.find(m => m.id === payload.messageId)
+                if (msg) msg.reactions = payload.reactions
+            } else if (payload.type === 'pin_updated') {
+                console.log('[CHAT STORE] Updating pinned message:', payload.pinned?.id)
+                pinnedMessage.value = payload.pinned
+            }
         })
     }
 
@@ -151,27 +177,34 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function sendMessage(receiverId, content, type = 'text', fileName = null) {
+    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null) {
         if (!socket.value) {
             console.error('Socket not connected. Cannot send message.')
             return Promise.reject(new Error('Socket not connected'))
         }
 
-        console.log(`Emitting chat.send to ${receiverId}...`, { content, type, fileName })
+        console.log(`Emitting chat.send to ${receiverId}...`, { content, type, fileName, replyToId })
 
         return new Promise((resolve, reject) => {
-            socket.value.emit('chat.send', { receiverId, content, type, fileName }, (response) => {
+            socket.value.emit('chat.send', { receiverId, content, type, fileName, replyToId }, (response) => {
                 console.log('Received acknowledgment for chat.send:', response)
                 if (response.status === 'ok') {
-                    messages.value = [...messages.value, {
+                    // We'll let the event echo or just push local
+                    const newMsg = {
+                        id: response.id,
                         senderId: auth.user.id,
                         receiverId,
                         content,
                         type,
                         fileName,
+                        reply_to_id: replyToId,
+                        reply_to: replyTo.value, // Local preview
                         timestamp: response.timestamp,
-                        isMe: true
-                    }]
+                        isMe: true,
+                        reactions: []
+                    }
+                    messages.value = [...messages.value, newMsg]
+                    replyTo.value = null // Clear after send
                     resolve(response)
                 } else {
                     reject(response)
@@ -188,16 +221,20 @@ export const useChatStore = defineStore('chat', () => {
     async function fetchHistory(receiverId) {
         const config = useRuntimeConfig()
         loadingMessages.value = true
-        // Optional: clear current messages to show fresh load, 
-        // but only if we want "per-user" isolation in history view.
         messages.value = [] 
+        pinnedMessage.value = null
+        activeUserId.value = receiverId
         
         try {
             const data = await $fetch(`${config.public.apiBase}/messages/${receiverId}`, {
                 headers: { Authorization: `Bearer ${auth.token}` }
             })
             
-            const historical = data.map(m => ({
+            // Handle new response format { messages, pinned }
+            const msgs = data.messages || []
+            pinnedMessage.value = data.pinned || null
+
+            const historical = msgs.map(m => ({
                 id: m.id,
                 senderId: m.sender_id,
                 receiverId: m.receiver_id,
@@ -206,18 +243,14 @@ export const useChatStore = defineStore('chat', () => {
                 fileName: m.file_name,
                 timestamp: m.created_at,
                 isMe: m.sender_id == auth.user?.id,
-                is_read: m.is_read
+                is_read: m.is_read,
+                reactions: m.reactions || [],
+                reply_to: m.reply_to || null,
+                reply_to_id: m.reply_to_id
             }))
 
-            // Add only if not already in store
-            historical.forEach(h => {
-                const exists = messages.value.some(m => m.id === h.id || (m.timestamp === h.timestamp && m.content === h.content))
-                if (!exists) messages.value.push(h)
-            })
+            messages.value = historical
             
-            // Sort by timestamp
-            messages.value.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-
             // Mark these as read
             sendRead(receiverId)
 
@@ -225,6 +258,36 @@ export const useChatStore = defineStore('chat', () => {
             console.error('Failed to fetch history', err)
         } finally {
             loadingMessages.value = false
+        }
+    }
+
+    async function toggleReaction(messageId, emoji) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/messages/react/${messageId}`, {
+                method: 'POST',
+                body: { emoji },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            // Update local message
+            const msg = messages.value.find(m => m.id === messageId)
+            if (msg) msg.reactions = data.reactions
+        } catch (err) {
+            console.error('Failed to toggle reaction', err)
+        }
+    }
+
+    async function togglePin(messageId) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/messages/pin/${messageId}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            pinnedMessage.value = data.pinned
+            return data.status
+        } catch (err) {
+            console.error('Failed to toggle pin', err)
         }
     }
 
@@ -294,6 +357,8 @@ export const useChatStore = defineStore('chat', () => {
         loadingMessages,
         users,
         blockedUsers,
+        pinnedMessage,
+        replyTo,
         blockUpdateTrigger,
         notificationPermission,
         init,
@@ -304,6 +369,8 @@ export const useChatStore = defineStore('chat', () => {
         sendRead,
         sendTyping,
         toggleBlock,
+        toggleReaction,
+        togglePin,
         isUserBlocked,
         disconnect
     }

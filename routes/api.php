@@ -25,6 +25,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messages', [MessagesController::class, 'store']);
     Route::post('/messages/upload', [MessagesController::class, 'upload']);
     Route::post('/messages/read/{senderId}', [MessagesController::class, 'markAsRead']);
+    Route::post('/messages/react/{messageId}', [MessagesController::class, 'toggleReaction']);
+    Route::post('/messages/pin/{messageId}', [MessagesController::class, 'togglePin']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Profile

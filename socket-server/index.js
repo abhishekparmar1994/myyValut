@@ -51,25 +51,51 @@ io.use((socket, next) => {
 });
 
 // Redis Subscription - Bridge from Laravel
-subscriber.psubscribe('laravel_database_user.*', 'laravel_database_private-user.*', 'laravel_database_notifications', (err, count) => {
+// Subscribing to ALL patterns temporarily to debug channel names
+subscriber.psubscribe('*', (err, count) => {
     if (err) console.error('Redis subscription error:', err);
-    else console.log(`Subscribed to ${count} patterns`);
+    else console.log(`[REDIS] Subscribed to ALL channels (Wildcard enabled)`);
 });
 
 subscriber.on('pmessage', (pattern, channel, message) => {
-    console.log(`Received message from ${channel} (pattern: ${pattern}): ${message}`);
-    const data = JSON.parse(message);
-    const event = data.event;
+    console.log(`[REDIS] Message on ${channel}: ${message.substring(0, 100)}...`);
+    
+    let data;
+    try {
+        data = JSON.parse(message);
+    } catch (e) {
+        console.error('Failed to parse Redis message', e);
+        return;
+    }
+
+    const originalEvent = data.event;
     const payload = data.data;
 
-    // Remove the prefix to get the actual channel name
-    const cleanChannel = channel.replace('laravel_database_', '');
+    // Clean up event name
+    let event = originalEvent.includes('.') ? originalEvent.split('.').pop() : originalEvent;
+    
+    // Normalize system.notification
+    if (event === 'notification' || originalEvent === 'system.notification') {
+        event = 'system.notification';
+    }
 
-    if (cleanChannel.startsWith('user.') || cleanChannel.startsWith('private-user.')) {
-        const userId = cleanChannel.split('.').pop();
-        io.to(`user.${userId}`).emit(event, payload);
-    } else if (cleanChannel === 'notifications') {
-        io.emit(event, payload);
+    // Unwrap Laravel's nested 'data' if present
+    let finalPayload = payload;
+    if (payload && payload.data && typeof payload.data === 'object' && !payload.type) {
+        finalPayload = { ...payload.data, ...payload };
+    }
+
+    // Detect userId from channel like "...user.123" or "...private-user.123"
+    if (channel.includes('user.')) {
+        const parts = channel.split('.');
+        if (parts.length >= 2) {
+            const userId = parts[parts.length - 1];
+            console.log(`[SOCKET] Relaying ${event} to user.${userId}`, finalPayload);
+            io.to(`user.${userId}`).emit(event, finalPayload);
+        }
+    } else if (channel.endsWith('notifications')) {
+        console.log(`[SOCKET] Broadcasting ${event} globally`);
+        io.emit(event, finalPayload);
     }
 });
 
@@ -94,7 +120,7 @@ io.on('connection', (socket) => {
     io.emit('presence.update', { userId, status: 'online' });
 
     // Handle incoming chat messages (Client to Client via Server)
-    socket.on('chat.send', async ({ receiverId, content, type, fileName }, callback) => {
+    socket.on('chat.send', async ({ receiverId, content, type, fileName, replyToId }, callback) => {
         if (!receiverId || !content) {
             return callback({ status: 'error', message: 'Invalid payload' });
         }
@@ -107,12 +133,15 @@ io.on('connection', (socket) => {
                 token = `Bearer ${token}`;
             }
 
+            console.log(`[API] Saving message with replyToId: ${replyToId}`);
+
             // Persist via Laravel API
-            await axios.post(`${API_URL}/messages`, {
+            const response = await axios.post(`${API_URL}/messages`, {
                 receiver_id: receiverId,
                 content,
                 type: type || 'text',
-                file_name: fileName
+                file_name: fileName,
+                reply_to_id: replyToId
             }, {
                 headers: { 
                     'Authorization': token,
@@ -120,17 +149,25 @@ io.on('connection', (socket) => {
                 }
             })
 
-            // Relay to receiver
+            const savedMessage = response.data;
+            console.log(`[API] Message saved with ID: ${savedMessage.id}`);
+
+            // Relay to receiver with FULL context
             io.to(`user.${receiverId}`).emit('message.received', {
+                id: savedMessage.id,
                 senderId: userId,
                 receiverId: receiverId,
-                content,
-                type: type || 'text',
-                fileName,
-                timestamp
+                content: savedMessage.content,
+                type: savedMessage.type,
+                fileName: savedMessage.file_name,
+                timestamp: savedMessage.created_at,
+                reply_to: savedMessage.reply_to,
+                reply_to_id: savedMessage.reply_to_id,
+                is_read: false,
+                reactions: []
             })
 
-            if (callback) callback({ status: 'ok', timestamp })
+            if (callback) callback({ status: 'ok', timestamp: savedMessage.created_at, id: savedMessage.id })
         } catch (err) {
             console.error('Failed to persist message. Error details:', err.response ? JSON.stringify(err.response.data) : err.message);
             if (callback) callback({ status: 'error', message: 'Failed to save message' })

@@ -100,6 +100,27 @@
             </div>
           </div>
 
+          <!-- Pinned Message Bar -->
+          <div v-if="chat.pinnedMessage" class="px-4 py-2 bg-primary-subtle border-bottom d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2 overflow-hidden">
+               <span class="fs-5">📌</span>
+               <div class="flex-grow-1 overflow-hidden">
+                 <div class="small fw-bold text-primary mb-0">Pinned Message</div>
+                 <div class="d-flex align-items-center gap-2">
+                   <img v-if="chat.pinnedMessage.type === 'image'" :src="chat.pinnedMessage.content" class="rounded" style="width: 24px; height: 24px; object-fit: cover;" />
+                   <span v-else-if="chat.pinnedMessage.type === 'file'">{{ getFileIcon(chat.pinnedMessage.fileName) }}</span>
+                   <div class="small text-muted text-truncate">
+                     {{ chat.pinnedMessage.type === 'image' ? 'Image' : (chat.pinnedMessage.type === 'file' ? chat.pinnedMessage.fileName : chat.pinnedMessage.content) }}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+            <BButton variant="link" size="sm" class="text-decoration-none text-muted p-0 px-2" @click="scrollToMessage(chat.pinnedMessage.id)">
+               View
+            </BButton>
+          </div>
+
           <!-- Messages -->
           <div class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-light scroll-smooth" ref="messageContainer">
             <!-- Loading State -->
@@ -111,107 +132,137 @@
             <template v-else>
               <div 
                 v-for="(msg, i) in filteredMessages" 
-              :key="i"
-              class="message-wrapper d-flex"
-              :class="msg.senderId === auth.user?.id ? 'justify-content-end' : 'justify-content-start'"
-            >
-              <div 
-                class="message px-3 py-2 rounded-4 shadow-sm max-w-75"
-                :class="msg.senderId === auth.user?.id ? 'bg-primary text-white' : 'bg-white border text-dark'"
+                :key="i"
+                :id="`msg-${msg.id}`"
+                class="message-wrapper d-flex mb-3 group"
+                :class="msg.senderId === auth.user?.id ? 'justify-content-end' : 'justify-content-start'"
               >
-                <!-- Render Content based on Type -->
-                <div v-if="msg.type === 'image'" class="media-content mb-1">
-                   <img :src="msg.content" class="img-fluid rounded-3 cursor-pointer" @click="openPreview(msg.content, msg.fileName)" style="max-height: 300px; object-fit: cover;" />
-                </div>
-                <div v-else-if="msg.type === 'file'" class="file-content mb-1 p-2 rounded-3 bg-opacity-10" :class="msg.senderId === auth.user?.id ? 'bg-white text-dark' : 'bg-primary text-dark'">
-                   <div class="d-flex align-items-center gap-2">
-                      <div class="file-icon fs-2">{{ getFileIcon(msg.fileName) }}</div>
-                      <div class="flex-grow-1 overflow-hidden">
-                        <div class="text-truncate fw-bold small" :class="msg.senderId === auth.user?.id ? 'text-white' : ''">{{ msg.fileName || 'Attachment' }}</div>
-                        <div class="d-flex gap-2">
-                          <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white text-opacity-75' : 'text-primary'" @click="openPreview(msg.content, msg.fileName)">
-                             View
-                          </BButton>
-                          <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white' : 'text-success'" @click="downloadFile(msg.content, msg.fileName)">
-                             Download
-                          </BButton>
-                        </div>
+                <div 
+                  class="message px-3 py-2 shadow-sm max-w-75 position-relative group"
+                  :class="msg.senderId === auth.user?.id ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
+                >
+                  <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
+                    <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
+                      <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
+                      <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
+                      <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
+                      <BDropdownDivider />
+                      <div class="px-2 pb-1 d-flex justify-content-around gap-2">
+                        <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
                       </div>
-                   </div>
-                </div>
-                <div v-else class="content">{{ msg.content }}</div>
-                
-                <div class="text-end mt-1" style="font-size: 0.65rem; opacity: 0.8">
-                  {{ formatTime(msg.timestamp) }}
-                  <span v-if="msg.senderId === auth.user?.id" :class="msg.is_read ? 'text-info' : 'text-white-50'"> ✓✓</span>
-                </div>
-              </div>
-            </div>
-            
-            <div v-if="!filteredMessages.length" class="d-flex flex-column align-items-center justify-content-center h-100 opacity-50 text-center p-5">
-              <div class="display-4 mb-3">💬</div>
-              <p>No messages yet. Say hello!</p>
-            </div>
-            
-            <!-- Typing Animation -->
-            <div v-if="chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start mt-2">
-              <div class="message px-3 py-2 rounded-4 shadow-sm bg-white border text-dark d-flex align-items-center gap-2">
-                <div class="typing-dots">
-                   <span></span><span></span><span></span>
-                </div>
-                <small class="text-muted fw-bold">typing</small>
-              </div>
-            </div>
-          </template>
-        </div>
+                    </BDropdown>
+                  </div>
 
-          <!-- Input -->
+                  <!-- Reply Preview inside message -->
+                  <div v-if="msg.reply_to" class="mb-2 p-2 rounded-3 bg-black bg-opacity-10 border-start border-3" :class="msg.senderId === auth.user?.id ? 'border-light-subtle' : 'border-primary'" style="cursor: pointer" @click="scrollToMessage(msg.reply_to_id)">
+                    <small class="fw-bold d-block">{{ msg.reply_to.sender_id === auth.user?.id ? 'You' : (activeUser.name || 'User') }}</small>
+                    <small class="text-truncate d-block opacity-75">{{ msg.reply_to.content }}</small>
+                  </div>
+
+                  <!-- Render Content based on Type -->
+                  <div v-if="msg.type === 'image'" class="media-content mb-1">
+                     <img :src="msg.content" class="img-fluid rounded-3 cursor-pointer" @click="openPreview(msg.content, msg.fileName)" style="max-height: 300px; object-fit: cover;" />
+                  </div>
+                  <div v-else-if="msg.type === 'file'" class="file-content mb-1 p-2 rounded-3 bg-opacity-10" :class="msg.senderId === auth.user?.id ? 'bg-white text-dark' : 'bg-primary text-dark'">
+                     <div class="d-flex align-items-center gap-2">
+                        <div class="file-icon fs-2">{{ getFileIcon(msg.fileName) }}</div>
+                        <div class="flex-grow-1 overflow-hidden">
+                          <div class="text-truncate fw-bold small" :class="msg.senderId === auth.user?.id ? 'text-white' : ''">{{ msg.fileName || 'Attachment' }}</div>
+                          <div class="d-flex gap-2">
+                            <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white text-opacity-75' : 'text-primary'" @click="openPreview(msg.content, msg.fileName)">
+                               View
+                            </BButton>
+                            <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white' : 'text-success'" @click="downloadFile(msg.content, msg.fileName)">
+                               Download
+                            </BButton>
+                          </div>
+                        </div>
+                     </div>
+                  </div>
+                  <div v-else class="content">{{ msg.content }}</div>
+                  
+                  <div class="text-end mt-1 d-flex align-items-center justify-content-end gap-1" style="font-size: 0.65rem; opacity: 0.8">
+                    {{ formatTime(msg.timestamp) }}
+                    <span v-if="msg.senderId === auth.user?.id" :class="msg.is_read ? 'text-info' : 'text-white-50'"> ✓✓</span>
+                  </div>
+
+                  <!-- Reactions Display -->
+                  <div v-if="msg.reactions && msg.reactions.length" class="reactions-container mt-1 d-flex gap-1 flex-wrap">
+                    <span v-for="(emoji, group) in groupReactions(msg.reactions)" :key="group" class="badge rounded-pill bg-light text-dark border shadow-sm px-2 py-1" style="font-size: 0.7rem; cursor: pointer" @click="chat.toggleReaction(msg.id, group)">
+                      {{ group }} {{ emoji.count }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Typing Animation -->
+              <div v-if="chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start mt-2">
+                <div class="message px-3 py-2 rounded-4 shadow-sm bg-white border text-dark d-flex align-items-center gap-2">
+                  <div class="typing-dots">
+                     <span></span><span></span><span></span>
+                  </div>
+                  <small class="text-muted fw-bold">typing</small>
+                </div>
+              </div>
+            </template>
+          </div>
+          <!-- Input Area -->
           <div class="p-4 bg-white border-top">
-            <div v-if="blockStatus.is_blocked" class="text-center p-3 rounded-3 bg-light border dashed">
-              <span class="text-muted small fw-bold">
-                 <span v-if="blockStatus.blocked_by_me">You have blocked this user. Unblock them to send messages.</span>
-                 <span v-else>This user has blocked you or communication is unavailable.</span>
-              </span>
-            </div>
-            <BForm v-else @submit.prevent="handleSend" class="d-flex gap-2 align-items-center position-relative">
-              <div class="emoji-picker-container" v-if="showEmojiPicker">
-                <EmojiPicker :native="true" @select="onSelectEmoji" theme="light" />
+              <div v-if="blockStatus.is_blocked" class="text-center p-3 rounded-3 bg-light border dashed">
+                <span class="text-muted small fw-bold">
+                   <span v-if="blockStatus.blocked_by_me">You have blocked this user. Unblock them to send messages.</span>
+                   <span v-else>This user has blocked you or communication is unavailable.</span>
+                </span>
               </div>
               
-              <div class="d-flex gap-2">
-                <BButton variant="light" @click="showEmojiPicker = !showEmojiPicker" class="rounded-circle p-2 shadow-none border-0">
-                  <span>😊</span>
-                </BButton>
-
-                <div class="media-upload">
-                  <input type="file" ref="fileInput" class="d-none" @change="onFileSelected" />
-                  <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2 shadow-none border-0" :disabled="uploading">
-                    <BSpinner small v-if="uploading" />
-                    <span v-else>📎</span>
-                  </BButton>
+              <!-- Reply Preview -->
+              <div v-if="chat.replyTo" class="mx-0 mb-2 p-2 rounded-3 bg-light border-start border-primary border-4 d-flex justify-content-between align-items-center">
+                <div class="overflow-hidden">
+                  <small class="fw-bold text-primary d-block">Replying to {{ chat.replyTo.senderId === auth.user?.id ? 'yourself' : activeUser.name }}</small>
+                  <small class="text-muted text-truncate d-block">{{ chat.replyTo.content }}</small>
                 </div>
+                <BButton variant="link" size="sm" class="text-decoration-none text-danger p-0 px-2" @click="chat.replyTo = null">✕</BButton>
               </div>
 
-              <BFormInput 
-                v-model="newMessage" 
-                placeholder="Type a message..." 
-                class="flex-grow-1 rounded-pill border-0 bg-light px-4 py-2 shadow-none"
-                @input="handleTyping"
-                @focus="showEmojiPicker = false"
-              />
-              <BButton type="submit" variant="primary" class="rounded-circle d-flex align-items-center justify-content-center p-2 shadow-none" style="width: 44px; height: 44px;">
-                ✈️
-              </BButton>
-            </BForm>
-          </div>
-        </template>
+              <BForm v-if="!blockStatus.is_blocked" @submit.prevent="handleSend" class="d-flex gap-2 align-items-center position-relative">
+                <div class="emoji-picker-container" v-if="showEmojiPicker">
+                  <EmojiPicker :native="true" @select="onSelectEmoji" theme="light" />
+                </div>
+                
+                <div class="d-flex gap-2">
+                  <BButton variant="light" @click="showEmojiPicker = !showEmojiPicker" class="rounded-circle p-2 shadow-none border-0">
+                    <span>😊</span>
+                  </BButton>
 
-        <div v-else class="h-100 d-flex flex-column align-items-center justify-content-center text-center p-5 text-muted">
-           <div class="display-1 mb-3">💬</div>
-           <h4 class="fw-bold">Your Messages</h4>
-           <p>Select a contact to start your distraction-free conversation.</p>
-        </div>
-      </BCol>
+                  <div class="media-upload">
+                    <input type="file" ref="fileInput" class="d-none" @change="onFileSelected" />
+                    <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2 shadow-none border-0" :disabled="uploading">
+                      <BSpinner small v-if="uploading" />
+                      <span v-else>📎</span>
+                    </BButton>
+                  </div>
+                </div>
+
+                <BFormInput 
+                  v-model="newMessage" 
+                  placeholder="Type a message..." 
+                  class="flex-grow-1 rounded-pill border-0 bg-light px-4 py-2 shadow-none"
+                  @input="handleTyping"
+                  @focus="showEmojiPicker = false"
+                />
+                <BButton type="submit" variant="primary" class="rounded-circle d-flex align-items-center justify-content-center p-2 shadow-none" style="width: 44px; height: 44px;">
+                  ✈️
+                </BButton>
+              </BForm>
+            </div>
+          </template>
+
+          <div v-else class="h-100 d-flex flex-column align-items-center justify-content-center text-center p-5 text-muted">
+             <div class="display-1 mb-3">💬</div>
+             <h4 class="fw-bold">Your Messages</h4>
+             <p>Select a contact to start your distraction-free conversation.</p>
+          </div>
+        </BCol>
     </BRow>
   </BContainer>
 
@@ -331,9 +382,12 @@ watch(() => chat.blockUpdateTrigger, () => {
 
 watch(activeUser, async (newVal) => {
     if (newVal) {
+        chat.activeUserId = newVal.id
         await chat.fetchHistory(newVal.id)
         await checkBlockStatus()
         scrollToBottom()
+    } else {
+        chat.activeUserId = null
     }
 })
 
@@ -472,12 +526,42 @@ async function handleSend() {
     if (!newMessage.value.trim() || !activeUser.value) return
     
     try {
-        await chat.sendMessage(activeUser.value.id, newMessage.value)
+        const replyToId = chat.replyTo?.id
+        await chat.sendMessage(activeUser.value.id, newMessage.value, 'text', null, replyToId)
         newMessage.value = ''
         scrollToBottom()
     } catch (err) {
         console.error('Failed to send', err)
     }
+}
+
+function scrollToMessage(messageId) {
+    if (!messageId) return
+    const index = chat.messages.findIndex(m => m.id === messageId)
+    if (index === -1) return
+    
+    // Simple way: browser scroll into view if elements exist
+    nextTick(() => {
+        const elements = document.querySelectorAll('.message-wrapper')
+        // We need to find the specific element. 
+        // Better: use an ID on the message element
+        const target = document.getElementById(`msg-${messageId}`)
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            target.classList.add('highlight-pulse')
+            setTimeout(() => target.classList.remove('highlight-pulse'), 2000)
+        }
+    })
+}
+
+function groupReactions(reactions) {
+    if (!reactions) return {}
+    return reactions.reduce((acc, r) => {
+        acc[r.emoji] = acc[r.emoji] || { count: 0, users: [] }
+        acc[r.emoji].count++
+        acc[r.emoji].users.push(r.user_id)
+        return acc
+    }, {})
 }
 
 let lastTypingTime = 0
@@ -559,18 +643,85 @@ watch(filteredMessages, () => {
 .scroll-smooth { scroll-behavior: smooth; }
 
 /* Custom Scrollbar */
+.chat-container {
+    background: #f8fafc;
+    min-height: calc(100vh - 80px);
+}
+
+.chat-wrapper {
+    height: calc(100vh - 120px);
+    background: #ffffff;
+}
+
+/* Glassmorphism Header */
+.glass-header {
+    background: rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Message Bubble Geometry */
+.message {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    transition: transform 0.2s ease;
+}
+
+.message-me {
+    color: white;
+    border-radius: 18px 18px 4px 18px;
+}
+
+.message-them {
+    border-radius: 18px 18px 18px 4px;
+}
+
+.bg-slate {
+    background: linear-gradient(135deg, #475569 0%, #1e293b 100%) !important;
+}
+
+.shadow-blue {
+    box-shadow: 0 4px 15px rgba(30, 41, 59, 0.2) !important;
+}
+
+/* Integrated Actions */
+.message-action-trigger {
+    opacity: 0.15;
+    z-index: 10;
+}
+
+.message-wrapper:hover .message-action-trigger {
+    opacity: 1 !important;
+}
+
+.text-muted-custom {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.message-them .text-muted-custom {
+    color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Pinned Bar Glassmorphism */
+.pinned-bar {
+    background: rgba(241, 245, 249, 0.9) !important;
+    backdrop-filter: blur(5px);
+}
+
+/* Scrollbar Refinement */
 ::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
 }
 ::-webkit-scrollbar-track {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: #e0e0e0;
+    background: #cbd5e1;
     border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #d0d0d0;
+    background: #94a3b8;
 }
 
 .emoji-picker-container {
@@ -579,15 +730,13 @@ watch(filteredMessages, () => {
     left: 0;
     margin-bottom: 0.5rem;
     z-index: 1000;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    border-radius: 12px;
     overflow: hidden;
 }
 
-/* Ensure picker doesn't go off context */
 :deep(.v3-emoji-picker) {
-    border-radius: 8px;
-    border: 1px solid #eee;
+    border: none !important;
 }
 
 .typing-dots {
@@ -596,27 +745,28 @@ watch(filteredMessages, () => {
 }
 
 .typing-dots span {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   background-color: var(--bs-primary);
   border-radius: 50%;
   animation: typing 1.4s infinite ease-in-out both;
 }
 
-.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-
 @keyframes typing {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); }
+  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+  40% { transform: scale(1.0); opacity: 1; }
 }
 
-.blink {
-  animation: blink 1s infinite alternate;
+.highlight-pulse {
+  animation: highlight-pulse 2s ease-out;
 }
 
-@keyframes blink {
-  from { opacity: 1; }
-  to { opacity: 0.5; }
+@keyframes highlight-pulse {
+  0% { background-color: rgba(71, 85, 105, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.max-w-75 {
+  max-width: 80%;
 }
 </style>

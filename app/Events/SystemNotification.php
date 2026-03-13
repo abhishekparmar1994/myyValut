@@ -4,26 +4,24 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 
-class SystemNotification implements ShouldBroadcast
+class SystemNotification implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $notification;
-    protected $userId;
+    public $data;
+    public $receiverId;
 
     /**
      * Create a new event instance.
      */
-    public function __construct($notification, $userId = null)
+    public function __construct($data, $receiverId)
     {
-        $this->notification = $notification;
-        $this->userId = $userId;
+        $this->data = $data;
+        $this->receiverId = $receiverId;
     }
 
     /**
@@ -33,16 +31,11 @@ class SystemNotification implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        if ($this->userId) {
-            return [new PrivateChannel('user.' . $this->userId)];
-        }
-
-        return [new Channel('notifications')];
+        return [
+            new Channel('user.' . $this->receiverId),
+        ];
     }
 
-    /**
-     * The event's broadcast name.
-     */
     public function broadcastAs(): string
     {
         return 'system.notification';

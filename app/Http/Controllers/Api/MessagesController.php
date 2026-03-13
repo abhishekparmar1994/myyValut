@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Message;
+use App\Models\MessageReaction;
+use App\Models\PinnedMessage;
+use App\Events\SystemNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Exception;
 
 class MessagesController extends Controller
 {
@@ -16,15 +20,25 @@ class MessagesController extends Controller
 
         $messages = Message::where(function ($query) use ($userId, $receiverId) {
             $query->where('sender_id', $userId)
-                  ->where('receiver_id', $receiverId);
+                ->where('receiver_id', $receiverId);
         })->orWhere(function ($query) use ($userId, $receiverId) {
             $query->where('sender_id', $receiverId)
-                  ->where('receiver_id', $userId);
+                ->where('receiver_id', $userId);
         })
-        ->orderBy('created_at', 'asc')
-        ->get();
+            ->with(['reactions', 'replyTo'])
+            ->orderBy('created_at', 'asc')
+            ->get();
 
-        return response()->json($messages);
+        $pinned = \App\Models\PinnedMessage::where(function ($q) use ($userId, $receiverId) {
+            $q->where('user1_id', $userId)->where('user2_id', $receiverId);
+        })->orWhere(function ($q) use ($userId, $receiverId) {
+            $q->where('user1_id', $receiverId)->where('user2_id', $userId);
+        })->with('message.reactions')->first();
+
+        return response()->json([
+            'messages' => $messages,
+            'pinned' => $pinned ? $pinned->message : null
+        ]);
     }
 
     public function store(Request $request)
@@ -34,6 +48,7 @@ class MessagesController extends Controller
             'content' => 'required|string',
             'type' => 'nullable|string',
             'file_name' => 'nullable|string',
+            'reply_to_id' => 'nullable|exists:messages,id',
         ]);
 
         if ($validator->fails()) {
@@ -44,13 +59,13 @@ class MessagesController extends Controller
         $receiverId = $request->receiver_id;
 
         // Check for active blocks
-        $isBlocked = \App\Models\UserBlock::where(function($query) use ($senderId, $receiverId) {
-                $query->where('blocker_id', $senderId)
-                      ->where('blocked_id', $receiverId);
-            })->orWhere(function($query) use ($senderId, $receiverId) {
-                $query->where('blocker_id', $receiverId)
-                      ->where('blocked_id', $senderId);
-            })->exists();
+        $isBlocked = \App\Models\UserBlock::where(function ($query) use ($senderId, $receiverId) {
+            $query->where('blocker_id', $senderId)
+                ->where('blocked_id', $receiverId);
+        })->orWhere(function ($query) use ($senderId, $receiverId) {
+            $query->where('blocker_id', $receiverId)
+                ->where('blocked_id', $senderId);
+        })->exists();
 
         if ($isBlocked) {
             return response()->json(['error' => 'Communication unavailable due to an active block.'], 403);
@@ -62,7 +77,10 @@ class MessagesController extends Controller
             'content' => $request->content,
             'type' => $request->type ?? 'text',
             'file_name' => $request->file_name,
+            'reply_to_id' => $request->reply_to_id,
         ]);
+
+        $message->load('replyTo');
 
         return response()->json($message, 201);
     }
@@ -89,7 +107,7 @@ class MessagesController extends Controller
             $mime = $file->getMimeType();
             $path = $file->store('chat/media', 'public');
             $url = asset('storage/' . $path);
-            
+
             // Determine type: 'image' or generic 'file'
             $type = str_contains($mime, 'image') ? 'image' : 'file';
 
@@ -122,5 +140,104 @@ class MessagesController extends Controller
             ->header('Access-Control-Allow-Origin', '*')
             ->header('Access-Control-Allow-Methods', 'GET')
             ->header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, Authorization');
+    }
+
+    public function toggleReaction(Request $request, $messageId)
+    {
+        $request->validate(['emoji' => 'required|string']);
+        $userId = $request->user()->id;
+        $emoji = $request->emoji;
+
+        $reaction = MessageReaction::where('message_id', $messageId)
+            ->where('user_id', $userId)
+            ->where('emoji', $emoji)
+            ->first();
+
+        if ($reaction) {
+            $reaction->delete();
+            $status = 'removed';
+        } else {
+            MessageReaction::create([
+                'message_id' => $messageId,
+                'user_id' => $userId,
+                'emoji' => $emoji
+            ]);
+            $status = 'added';
+        }
+
+        $message = Message::with('reactions')->find($messageId);
+        if (!$message) return response()->json(['error' => 'Not found'], 404);
+
+        // Notify Sender: Partner is Receiver
+        event(new SystemNotification([
+            'type' => 'reaction_updated',
+            'messageId' => $messageId,
+            'reactions' => $message->reactions,
+            'status' => $status,
+            'partnerId' => $message->receiver_id
+        ], $message->sender_id));
+
+        // Notify Receiver: Partner is Sender
+        event(new SystemNotification([
+            'type' => 'reaction_updated',
+            'messageId' => $messageId,
+            'reactions' => $message->reactions,
+            'status' => $status,
+            'partnerId' => $message->sender_id
+        ], $message->receiver_id));
+
+        return response()->json(['status' => $status, 'reactions' => $message->reactions]);
+    }
+
+    public function togglePin(Request $request, $messageId)
+    {
+        $userId = $request->user()->id;
+        $message = Message::findOrFail($messageId);
+
+        $senderId = (int)$message->sender_id;
+        $receiverId = (int)$message->receiver_id;
+
+        $u1 = min($senderId, $receiverId);
+        $u2 = max($senderId, $receiverId);
+
+        $existing = PinnedMessage::where('user1_id', $u1)
+            ->where('user2_id', $u2)
+            ->first();
+
+        if ($existing && $existing->message_id == $messageId) {
+            $existing->delete();
+            $status = 'unpinned';
+            $pinnedMessage = null;
+        } else {
+            if ($existing) {
+                $existing->update(['message_id' => $messageId]);
+            } else {
+                PinnedMessage::create([
+                    'user1_id' => $u1,
+                    'user2_id' => $u2,
+                    'message_id' => $messageId
+                ]);
+            }
+            $status = 'pinned';
+            $pinnedMessage = $message->load('reactions');
+        }
+
+        // Notify Sender: Partner is Receiver
+        event(new SystemNotification([
+            'type' => 'pin_updated',
+            'pinned' => $pinnedMessage,
+            'status' => $status,
+            'partnerId' => $receiverId
+        ], $senderId));
+
+        // Notify Receiver: Partner is Sender
+        event(new SystemNotification([
+            'type' => 'pin_updated',
+            'pinned' => $pinnedMessage,
+            'status' => $status,
+            'partnerId' => $senderId
+        ], $receiverId));
+
+        return response()->json(['status' => $status, 'pinned' => $pinnedMessage]);
     }
 }

@@ -13,16 +13,32 @@ class Message extends Model
         'content',
         'type',
         'file_name',
-        'is_read'
+        'is_read',
+        'reply_to_id'
     ];
+
+    public function reactions()
+    {
+        return $this->hasMany(MessageReaction::class);
+    }
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(Message::class , 'reply_to_id');
+    }
+
+    public function replies()
+    {
+        return $this->hasMany(Message::class , 'reply_to_id');
+    }
 
     public function sender(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'sender_id');
+        return $this->belongsTo(User::class , 'sender_id');
     }
 
     public function receiver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'receiver_id');
+        return $this->belongsTo(User::class , 'receiver_id');
     }
 }

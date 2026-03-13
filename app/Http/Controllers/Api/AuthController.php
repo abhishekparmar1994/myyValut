@@ -81,7 +81,7 @@ class AuthController extends Controller
     {
         return response()->json(
             User::where('id', '!=', $request->user()->id)
-                ->select('id', 'name', 'email')
+                ->select('id', 'name', 'email', 'profile_image')
                 ->get()
         );
     }

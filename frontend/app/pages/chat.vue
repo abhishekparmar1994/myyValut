@@ -22,7 +22,12 @@
               @click="activeUser = user"
             >
               <div class="position-relative">
-                <BAvatar variant="info" :text="user.name.charAt(0)" />
+                <BAvatar 
+                  v-if="user.profile_image"
+                  :src="getProfileImageUrl(user)"
+                  variant="info" 
+                />
+                <BAvatar v-else variant="info" :text="user.name.charAt(0)" />
                 <span class="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle p-1" style="width: 12px; height: 12px;"></span>
               </div>
               <div class="flex-grow-1 overflow-hidden">
@@ -43,7 +48,12 @@
               :class="{ 'bg-primary-subtle border-primary': activeUser?.id === user.id }"
               @click="activeUser = user"
             >
-              <BAvatar variant="secondary" :text="user.name.charAt(0)" />
+              <BAvatar 
+                v-if="user.profile_image"
+                :src="getProfileImageUrl(user)"
+                variant="secondary" 
+              />
+              <BAvatar v-else variant="secondary" :text="user.name.charAt(0)" />
               <div class="flex-grow-1 overflow-hidden">
                 <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
                 <small class="text-muted text-truncate d-block">Offline</small>
@@ -62,7 +72,12 @@
         <template v-if="activeUser">
           <div class="p-4 border-bottom d-flex align-items-center justify-content-between bg-white">
             <div class="d-flex align-items-center gap-3">
-              <BAvatar variant="info" :text="activeUser.name.charAt(0)" />
+              <BAvatar 
+                v-if="activeUser.profile_image"
+                :src="getProfileImageUrl(activeUser)"
+                variant="info" 
+              />
+              <BAvatar v-else variant="info" :text="activeUser.name.charAt(0)" />
               <div>
                 <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
                 <small class="text-success" v-if="chat.presence[activeUser.id] === 'online'">Active Now</small>
@@ -211,6 +226,13 @@ function openImage(url) {
 
 function authHeaders() {
     return { Authorization: `Bearer ${auth.token}` }
+}
+
+function getProfileImageUrl(user) {
+    if (!user || !user.profile_image) return null
+    // Assuming backend serves storage via /storage/ prefix on the base domain
+    const baseUrl = config.public.apiBase.replace('/api', '')
+    return `${baseUrl}/storage/${user.profile_image}`
 }
 
 const filteredMessages = computed(() => {

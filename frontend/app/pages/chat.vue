@@ -114,12 +114,12 @@
                    <div class="d-flex align-items-center gap-2">
                       <div class="file-icon fs-2">{{ getFileIcon(msg.fileName) }}</div>
                       <div class="flex-grow-1 overflow-hidden">
-                        <div class="text-truncate fw-bold small">{{ msg.fileName || 'Attachment' }}</div>
+                        <div class="text-truncate fw-bold small" :class="msg.senderId === auth.user?.id ? 'text-white' : ''">{{ msg.fileName || 'Attachment' }}</div>
                         <div class="d-flex gap-2">
-                          <BButton variant="link" size="sm" class="p-0 text-decoration-none text-primary small fw-bold" @click="openPreview(msg.content, msg.fileName)">
+                          <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white text-opacity-75' : 'text-primary'" @click="openPreview(msg.content, msg.fileName)">
                              View
                           </BButton>
-                          <BButton variant="link" size="sm" class="p-0 text-decoration-none text-success small fw-bold" @click="downloadFile(msg.content, msg.fileName)">
+                          <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white' : 'text-success'" @click="downloadFile(msg.content, msg.fileName)">
                              Download
                           </BButton>
                         </div>
@@ -370,10 +370,8 @@ function authHeaders() {
 }
 
 function getProfileImageUrl(user) {
-    if (!user || !user.profile_image) return null
-    // Assuming backend serves storage via /storage/ prefix on the base domain
-    const baseUrl = config.public.apiBase.replace('/api', '')
-    return `${baseUrl}/storage/${user.profile_image}`
+    if (!user) return null
+    return user.profile_image_url || null
 }
 
 const filteredMessages = computed(() => {

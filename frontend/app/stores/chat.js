@@ -56,6 +56,11 @@ export const useChatStore = defineStore('chat', () => {
             console.log('Connected to chat server')
         })
 
+        socket.value.on('connect_error', (err) => {
+            console.error('Socket connect_error:', err)
+            alert(`Socket connection failed: ${err.message}`)
+        })
+
         socket.value.on('disconnect', () => {
             connected.value = false
             console.log('Disconnected from chat server')
@@ -66,7 +71,7 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('message.received', (message) => {
-            messages.value.push(message)
+            messages.value = [...messages.value, message]
             
             // Show background notification
             if (import.meta.client && document.visibilityState === 'hidden') {
@@ -99,10 +104,10 @@ export const useChatStore = defineStore('chat', () => {
 
         // Bridges from Laravel (Redis -> Socket -> Client)
         socket.value.on('message.sent', (payload) => {
-            messages.value.push({
+            messages.value = [...messages.value, {
                 ...payload.message,
                 fromLaravel: true
-            })
+            }]
         })
 
         socket.value.on('system.notification', (payload) => {
@@ -123,12 +128,18 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     function sendMessage(receiverId, content, type = 'text', fileName = null) {
-        if (!socket.value) return
+        if (!socket.value) {
+            console.error('Socket not connected. Cannot send message.')
+            return Promise.reject(new Error('Socket not connected'))
+        }
+
+        console.log(`Emitting chat.send to ${receiverId}...`, { content, type, fileName })
 
         return new Promise((resolve, reject) => {
             socket.value.emit('chat.send', { receiverId, content, type, fileName }, (response) => {
+                console.log('Received acknowledgment for chat.send:', response)
                 if (response.status === 'ok') {
-                    messages.value.push({
+                    messages.value = [...messages.value, {
                         senderId: auth.user.id,
                         receiverId,
                         content,
@@ -136,7 +147,7 @@ export const useChatStore = defineStore('chat', () => {
                         fileName,
                         timestamp: response.timestamp,
                         isMe: true
-                    })
+                    }]
                     resolve(response)
                 } else {
                     reject(response)

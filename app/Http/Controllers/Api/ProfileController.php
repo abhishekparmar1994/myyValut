@@ -81,7 +81,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'message'           => 'Profile image updated',
-            'profile_image_url' => '/storage/' . $filename,
+            'profile_image_url' => asset('storage/' . $filename),
         ]);
     }
 
@@ -97,7 +97,7 @@ class ProfileController extends Controller
             'city'              => $user->city,
             'has_image'         => (bool) $user->profile_image,
             'profile_image_url' => $user->profile_image
-                ? '/storage/' . $user->profile_image
+                ? asset('storage/' . $user->profile_image)
                 : null,
         ];
     }

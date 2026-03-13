@@ -119,6 +119,7 @@ io.on('connection', (socket) => {
             // Relay to receiver
             io.to(`user.${receiverId}`).emit('message.received', {
                 senderId: userId,
+                receiverId: receiverId,
                 content,
                 type: type || 'text',
                 fileName,
@@ -127,7 +128,7 @@ io.on('connection', (socket) => {
 
             if (callback) callback({ status: 'ok', timestamp })
         } catch (err) {
-            console.error('Failed to persist message:', err.response?.data || err.message)
+            console.error('Failed to persist message. Error details:', err.response ? JSON.stringify(err.response.data) : err.message);
             if (callback) callback({ status: 'error', message: 'Failed to save message' })
         }
     })

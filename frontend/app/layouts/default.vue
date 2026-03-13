@@ -24,6 +24,7 @@
                 <BDropdownItem as="NuxtLink" to="/notes">📋 Notes & To-Dos</BDropdownItem>
                 <BDropdownItem as="NuxtLink" to="/vehicles">🚗 Vehicles</BDropdownItem>
                 <BDropdownItem as="NuxtLink" to="/budget">📊 Budget</BDropdownItem>
+                <BDropdownItem as="NuxtLink" to="/chat">💬 Live Chat</BDropdownItem>
               </BNavItemDropdown>
               <BNavItemDropdown right>
                 <template #button-content>

@@ -76,4 +76,13 @@ class AuthController extends Controller
             'message' => 'Successfully logged out'
         ]);
     }
+
+    public function users(Request $request)
+    {
+        return response()->json(
+            User::where('id', '!=', $request->user()->id)
+                ->select('id', 'name', 'email')
+                ->get()
+        );
+    }
 }

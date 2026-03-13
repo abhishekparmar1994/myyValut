@@ -12,12 +12,18 @@ use App\Http\Controllers\Api\NoteController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\MessagesController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', fn(Request $request) => $request->user());
+    Route::get('/users', [AuthController::class, 'users']);
+    Route::get('/messages/{receiverId}', [MessagesController::class, 'index']);
+    Route::post('/messages', [MessagesController::class, 'store']);
+    Route::post('/messages/upload', [MessagesController::class, 'upload']);
+    Route::post('/messages/read/{senderId}', [MessagesController::class, 'markAsRead']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Profile

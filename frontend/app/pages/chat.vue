@@ -81,7 +81,7 @@
               <div>
                 <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
                 <small class="text-primary fw-bold blink" v-if="chat.typingUsers[String(activeUser.id)]">typing...</small>
-                <small class="text-success" v-else-if="chat.presence[activeUser.id] === 'online'">Active Now</small>
+                <small class="text-success" v-else-if="chat.presence[String(activeUser.id)] === 'online'">Active Now</small>
                 <small class="text-muted" v-else>Offline</small>
               </div>
             </div>
@@ -393,11 +393,11 @@ watch(activeUser, async (newVal) => {
 
 // Use store-managed users
 const onlineUsers = computed(() => {
-    return chat.users.filter(u => chat.presence[u.id] === 'online' && u.id !== auth.user?.id)
+    return chat.users.filter(u => chat.presence[String(u.id)] === 'online' && String(u.id) !== String(auth.user?.id))
 })
 
 const offlineUsers = computed(() => {
-    return chat.users.filter(u => (!chat.presence[u.id] || chat.presence[u.id] === 'offline') && u.id !== auth.user?.id)
+    return chat.users.filter(u => (!chat.presence[String(u.id)] || chat.presence[String(u.id)] === 'offline') && String(u.id) !== String(auth.user?.id))
 })
 
 const uploading = ref(false)

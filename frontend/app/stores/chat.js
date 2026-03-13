@@ -103,7 +103,7 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('presence.update', ({ userId, status }) => {
-            presence.value = { ...presence.value, [userId]: status }
+            presence.value = { ...presence.value, [String(userId)]: status }
         })
 
         socket.value.on('chat.typing', ({ userId }) => {
@@ -156,8 +156,13 @@ export const useChatStore = defineStore('chat', () => {
 
             if (payload.type === 'reaction_updated') {
                 console.log('[CHAT STORE] Updating reactions for msg:', payload.messageId)
-                const msg = messages.value.find(m => m.id === payload.messageId)
-                if (msg) msg.reactions = payload.reactions
+                // Use type-agnostic comparison for message IDs
+                const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                if (msg) {
+                    msg.reactions = payload.reactions
+                } else {
+                    console.warn('[CHAT STORE] Message not found for reaction update:', payload.messageId)
+                }
             } else if (payload.type === 'pin_updated') {
                 console.log('[CHAT STORE] Updating pinned message:', payload.pinned?.id)
                 pinnedMessage.value = payload.pinned

@@ -160,7 +160,7 @@
                     <small class="text-truncate d-block opacity-75">{{ msg.reply_to.content }}</small>
                   </div>
                   <!-- Message Content -->
-                  <div v-if="msg.is_deleted_everyone" class="text-muted fst-italic small d-flex align-items-center gap-2 py-1">
+                  <div v-if="msg.is_deleted_everyone" class="fst-italic small d-flex align-items-center gap-2 py-1" :class="msg.senderId === auth.user?.id ? 'text-white-50' : 'text-muted'">
                      <span class="opacity-50">🚫</span> This message was deleted
                   </div>
                   <template v-else>

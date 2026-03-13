@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class MessagesController extends Controller
 {
@@ -32,6 +33,7 @@ class MessagesController extends Controller
             'receiver_id' => 'required|exists:users,id',
             'content' => 'required|string',
             'type' => 'nullable|string',
+            'file_name' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -43,6 +45,7 @@ class MessagesController extends Controller
             'receiver_id' => $request->receiver_id,
             'content' => $request->content,
             'type' => $request->type ?? 'text',
+            'file_name' => $request->file_name,
         ]);
 
         return response()->json($message, 201);
@@ -61,19 +64,47 @@ class MessagesController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|image|max:5120', // 5MB max
+            'file' => 'required|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,zip,csv,txt|max:10240', // 10MB max
         ]);
 
         if ($request->hasFile('file')) {
-            $path = $request->file('file')->store('chat/media', 'public');
+            $file = $request->file('file');
+            $originalName = $file->getClientOriginalName();
+            $mime = $file->getMimeType();
+            $path = $file->store('chat/media', 'public');
             $url = asset('storage/' . $path);
             
+            // Determine type: 'image' or generic 'file'
+            $type = str_contains($mime, 'image') ? 'image' : 'file';
+
             return response()->json([
                 'url' => $url,
-                'path' => $path
+                'path' => $path,
+                'name' => $originalName,
+                'type' => $type,
+                'mime' => $mime
             ]);
         }
 
         return response()->json(['error' => 'No file uploaded'], 400);
+    }
+
+    /**
+     * Serve a file with CORS headers for in-browser previewing.
+     */
+    public function getFile(Request $request, $path)
+    {
+        if (!Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        $file = Storage::disk('public')->get($path);
+        $mime = Storage::disk('public')->mimeType($path);
+
+        return response($file, 200)
+            ->header('Content-Type', $mime)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET')
+            ->header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, Authorization');
     }
 }

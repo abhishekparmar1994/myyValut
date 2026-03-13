@@ -108,7 +108,23 @@
               >
                 <!-- Render Content based on Type -->
                 <div v-if="msg.type === 'image'" class="media-content mb-1">
-                   <img :src="msg.content" class="img-fluid rounded-3 cursor-pointer" @click="openImage(msg.content)" style="max-height: 300px; object-fit: cover;" />
+                   <img :src="msg.content" class="img-fluid rounded-3 cursor-pointer" @click="openPreview(msg.content, msg.fileName)" style="max-height: 300px; object-fit: cover;" />
+                </div>
+                <div v-else-if="msg.type === 'file'" class="file-content mb-1 p-2 rounded-3 bg-opacity-10" :class="msg.senderId === auth.user?.id ? 'bg-white text-dark' : 'bg-primary text-dark'">
+                   <div class="d-flex align-items-center gap-2">
+                      <div class="file-icon fs-2">{{ getFileIcon(msg.fileName) }}</div>
+                      <div class="flex-grow-1 overflow-hidden">
+                        <div class="text-truncate fw-bold small">{{ msg.fileName || 'Attachment' }}</div>
+                        <div class="d-flex gap-2">
+                          <BButton variant="link" size="sm" class="p-0 text-decoration-none text-primary small fw-bold" @click="openPreview(msg.content, msg.fileName)">
+                             View
+                          </BButton>
+                          <BButton variant="link" size="sm" class="p-0 text-decoration-none text-success small fw-bold" @click="downloadFile(msg.content, msg.fileName)">
+                             Download
+                          </BButton>
+                        </div>
+                      </div>
+                   </div>
                 </div>
                 <div v-else class="content">{{ msg.content }}</div>
                 
@@ -130,10 +146,10 @@
           <div class="p-4 bg-white border-top">
             <BForm @submit.prevent="handleSend" class="d-flex gap-2 align-items-center">
               <div class="media-upload">
-                <input type="file" ref="fileInput" class="d-none" accept="image/*" @change="onFileSelected" />
+                <input type="file" ref="fileInput" class="d-none" @change="onFileSelected" />
                 <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2" :disabled="uploading">
                   <BSpinner small v-if="uploading" />
-                  <span v-else>📷</span>
+                  <span v-else>📎</span>
                 </BButton>
               </div>
               <BFormInput 
@@ -157,17 +173,72 @@
       </BCol>
     </BRow>
   </BContainer>
+
+  <!-- Document Preview Modal -->
+  <BModal v-model="showPreview" :title="previewName" size="xl" hide-footer centered body-class="p-0 overflow-hidden">
+    <div class="preview-body bg-light d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+      <div v-if="previewLoading" class="text-center p-5">
+        <BSpinner variant="primary" style="width: 3rem; height: 3rem;" />
+        <p class="mt-3 text-muted">Preparing document preview...</p>
+      </div>
+      <ClientOnly v-else>
+        <VueOfficePdf 
+          v-if="previewType === 'pdf' && previewUrl" 
+          :src="previewUrl" 
+          class="w-100 h-100"
+          style="height: 80vh !important;"
+        />
+        <VueOfficeExcel 
+          v-else-if="previewType === 'excel' && previewUrl" 
+          :src="previewUrl" 
+          class="w-100 h-100"
+          style="height: 80vh !important;"
+        />
+        <VueOfficeDocx 
+          v-else-if="previewType === 'docx' && previewUrl" 
+          :src="previewUrl" 
+          class="w-100 h-100"
+          style="height: 80vh !important;"
+        />
+        <div v-else-if="previewType === 'image'" class="p-4 text-center">
+          <img :src="previewUrl" class="img-fluid rounded shadow-lg" style="max-height: 75vh; object-fit: contain;" />
+        </div>
+        <div v-else class="text-center p-5">
+          <div class="fs-1 mb-3">📁</div>
+          <h5>Preview not available for this file type</h5>
+          <BButton variant="primary" class="mt-3" @click="downloadFile(previewUrl, previewName)">
+            Download to View
+          </BButton>
+        </div>
+      </ClientOnly>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
-import { useChatStore } from '~/stores/chat'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useAuthStore } from '~/stores/auth'
+import { useChatStore } from '~/stores/chat'
+
+// Import document viewers
+import VueOfficePdf from '@vue-office/pdf'
+import VueOfficeExcel from '@vue-office/excel'
+import VueOfficeDocx from '@vue-office/docx'
+// Import styles
+import '@vue-office/excel/lib/index.css'
+import '@vue-office/docx/lib/index.css'
 
 definePageMeta({ middleware: 'auth' })
 
 const chat = useChatStore()
 const auth = useAuthStore()
 const config = useRuntimeConfig()
+
+// State for Document Preview
+const showPreview = ref(false)
+const previewUrl = ref('')
+const previewType = ref('')
+const previewName = ref('')
 
 const newMessage = ref('')
 const activeUser = ref(null)
@@ -207,8 +278,8 @@ async function onFileSelected(event) {
             headers: authHeaders()
         })
         
-        // Send as image message
-        await chat.sendMessage(activeUser.value.id, data.url, 'image')
+        // Send as appropriate message type
+        await chat.sendMessage(activeUser.value.id, data.url, data.type, data.name)
         scrollToBottom()
     } catch (err) {
         console.error('Upload failed', err)
@@ -218,9 +289,79 @@ async function onFileSelected(event) {
     }
 }
 
-function openImage(url) {
+const previewLoading = ref(false)
+
+async function openPreview(url, fileName) {
+    if (!url) return
+    
+    previewName.value = fileName || 'Document'
+    const ext = (fileName || url).split('.').pop().toLowerCase()
+    
+    if (ext === 'pdf') {
+        previewType.value = 'pdf'
+    } else if (['xls', 'xlsx'].includes(ext)) {
+        previewType.value = 'excel'
+    } else if (['doc', 'docx'].includes(ext)) {
+        previewType.value = 'docx'
+    } else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+        previewType.value = 'image'
+    } else {
+        if (import.meta.client) window.open(url, '_blank')
+        return
+    }
+
+    showPreview.value = true
+    
+    // For non-images, fetch as ArrayBuffer via proxy to ensure CORS compliance
+    if (previewType.value !== 'image') {
+        previewLoading.value = true
+        previewUrl.value = '' // Clear previous
+        
+        // Transform direct storage URL to proxy URL to bypass CORS
+        let fetchUrl = url
+        if (url.includes('/storage/')) {
+            const path = url.split('/storage/').pop()
+            fetchUrl = `${config.public.apiBase}/messages/file/${path}`
+        }
+
+        try {
+            const response = await fetch(fetchUrl, {
+                headers: authHeaders()
+            })
+            const buffer = await response.arrayBuffer()
+            previewUrl.value = buffer
+        } catch (err) {
+            console.error('Failed to load preview data', err)
+            previewUrl.value = url // Fallback
+        } finally {
+            previewLoading.value = false
+        }
+    } else {
+        previewUrl.value = url
+        previewLoading.value = false
+    }
+}
+
+function getFileIcon(fileName) {
+    if (!fileName) return '📄'
+    const ext = fileName.split('.').pop().toLowerCase()
+    if (ext === 'pdf') return '📕'
+    if (['doc', 'docx'].includes(ext)) return '📘'
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return '📗'
+    if (ext === 'zip') return '📦'
+    if (ext === 'txt') return '📝'
+    return '📄'
+}
+
+function downloadFile(url, fileName) {
     if (import.meta.client) {
-        window.open(url, '_blank')
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName || 'download'
+        link.target = '_blank'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
     }
 }
 

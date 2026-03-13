@@ -65,4 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::post('/transactions', [TransactionController::class, 'store']);
     Route::delete('/transactions/{transaction}', [TransactionController::class, 'destroy']);
+
+    // File Preview with CORS
+    Route::get('/messages/file/{path}', [MessagesController::class, 'getFile'])->where('path', '.*');
 });

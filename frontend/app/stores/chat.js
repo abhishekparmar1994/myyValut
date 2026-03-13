@@ -122,17 +122,18 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function sendMessage(receiverId, content, type = 'text') {
+    function sendMessage(receiverId, content, type = 'text', fileName = null) {
         if (!socket.value) return
 
         return new Promise((resolve, reject) => {
-            socket.value.emit('chat.send', { receiverId, content, type }, (response) => {
+            socket.value.emit('chat.send', { receiverId, content, type, fileName }, (response) => {
                 if (response.status === 'ok') {
                     messages.value.push({
                         senderId: auth.user.id,
                         receiverId,
                         content,
                         type,
+                        fileName,
                         timestamp: response.timestamp,
                         isMe: true
                     })
@@ -167,6 +168,7 @@ export const useChatStore = defineStore('chat', () => {
                 receiverId: m.receiver_id,
                 content: m.content,
                 type: m.type,
+                fileName: m.file_name,
                 timestamp: m.created_at,
                 isMe: m.sender_id == auth.user?.id,
                 is_read: m.is_read

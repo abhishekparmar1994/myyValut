@@ -90,44 +90,47 @@ io.on('connection', (socket) => {
     io.emit('presence.update', { userId, status: 'online' });
 
     // Handle incoming chat messages (Client to Client via Server)
-    socket.on('chat.send', async (payload, callback) => {
-        if (!payload.receiverId || !payload.content) {
+    socket.on('chat.send', async ({ receiverId, content, type, fileName }, callback) => {
+        if (!receiverId || !content) {
             return callback({ status: 'error', message: 'Invalid payload' });
         }
 
-        const messageData = {
-            senderId: userId,
-            receiverId: payload.receiverId,
-            content: payload.content,
-            type: payload.type || 'text',
-            timestamp: new Date().toISOString()
-        };
-
-        // 1. Emit to receiver immediately for real-time feel
-        io.to(`user.${payload.receiverId}`).emit('message.received', messageData);
+        const timestamp = new Date().toISOString()
         
-        // 2. Persist to Laravel Database
         try {
             let token = socket.handshake.auth.token || socket.handshake.headers['authorization'];
             if (token && !token.startsWith('Bearer ')) {
                 token = `Bearer ${token}`;
             }
 
+            // Persist via Laravel API
             await axios.post(`${API_URL}/messages`, {
-                receiver_id: payload.receiverId,
-                content: payload.content,
-                type: messageData.type
+                receiver_id: receiverId,
+                content,
+                type: type || 'text',
+                file_name: fileName
             }, {
-                headers: { Authorization: token }
-            });
-            console.log(`Persisted ${messageData.type} message from ${userId} to ${payload.receiverId}`);
-        } catch (err) {
-            console.error('Failed to persist message to Laravel:', err.response?.data || err.message);
-        }
+                headers: { 
+                    'Authorization': token,
+                    'Accept': 'application/json'
+                }
+            })
 
-        // 3. Acknowledgment to sender
-        callback({ status: 'ok', timestamp: messageData.timestamp });
-    });
+            // Relay to receiver
+            io.to(`user.${receiverId}`).emit('message.received', {
+                senderId: userId,
+                content,
+                type: type || 'text',
+                fileName,
+                timestamp
+            })
+
+            if (callback) callback({ status: 'ok', timestamp })
+        } catch (err) {
+            console.error('Failed to persist message:', err.response?.data || err.message)
+            if (callback) callback({ status: 'error', message: 'Failed to save message' })
+        }
+    })
 
     // Typing Indicators
     socket.on('chat.typing', (payload) => {

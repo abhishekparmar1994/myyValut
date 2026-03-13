@@ -12,6 +12,7 @@ class Message extends Model
         'receiver_id',
         'content',
         'type',
+        'file_name',
         'is_read'
     ];
 

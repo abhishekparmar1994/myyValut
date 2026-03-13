@@ -40,6 +40,22 @@ class MessagesController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
+        $senderId = $request->user()->id;
+        $receiverId = $request->receiver_id;
+
+        // Check for active blocks
+        $isBlocked = \App\Models\UserBlock::where(function($query) use ($senderId, $receiverId) {
+                $query->where('blocker_id', $senderId)
+                      ->where('blocked_id', $receiverId);
+            })->orWhere(function($query) use ($senderId, $receiverId) {
+                $query->where('blocker_id', $receiverId)
+                      ->where('blocked_id', $senderId);
+            })->exists();
+
+        if ($isBlocked) {
+            return response()->json(['error' => 'Communication unavailable due to an active block.'], 403);
+        }
+
         $message = Message::create([
             'sender_id' => $request->user()->id,
             'receiver_id' => $request->receiver_id,

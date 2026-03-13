@@ -7,16 +7,19 @@ export const useChatStore = defineStore('chat', () => {
     const socket = ref(null)
     const messages = ref([])
     const presence = ref({})
-    const typingUsers = ref(new Set())
+    const typingUsers = ref({}) // { userId: timeoutId }
     const connected = ref(false)
     const loadingMessages = ref(false)
     const users = ref([])
+    const blockedUsers = ref([])
+    const blockUpdateTrigger = ref(0)
     const notificationPermission = ref('default')
 
     function init() {
         if (socket.value) return
         
         fetchUsers()
+        fetchBlockedUsers()
 
         // Request notification permission if supported
         if (import.meta.client && 'Notification' in window) {
@@ -56,6 +59,14 @@ export const useChatStore = defineStore('chat', () => {
             console.log('Connected to chat server')
         })
 
+        socket.value.on('block.updated', (payload) => {
+            // Signal a refresh might be needed for components watching this
+            // We can just trigger fetchBlockedUsers to be safe, though it's the other way
+            console.log('Block status updated by another user', payload)
+            // Use a trigger ref that components can watch
+            blockUpdateTrigger.value++
+        })
+
         socket.value.on('connect_error', (err) => {
             console.error('Socket connect_error:', err)
             alert(`Socket connection failed: ${err.message}`)
@@ -90,8 +101,21 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('chat.typing', ({ userId }) => {
-            typingUsers.value.add(String(userId))
-            setTimeout(() => typingUsers.value.delete(String(userId)), 3000)
+            const uid = String(userId)
+            
+            // Clear existing timeout if any
+            if (typingUsers.value[uid]) {
+                clearTimeout(typingUsers.value[uid])
+            }
+            
+            // Set a new timeout to clear typing status
+            const timeout = setTimeout(() => {
+                const newTyping = { ...typingUsers.value }
+                delete newTyping[uid]
+                typingUsers.value = newTyping
+            }, 3000)
+
+            typingUsers.value = { ...typingUsers.value, [uid]: timeout }
         })
 
         socket.value.on('chat.read', ({ userId }) => {
@@ -229,6 +253,39 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
+    async function fetchBlockedUsers() {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/blocks`, {
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            blockedUsers.value = data
+        } catch (err) {
+            console.error('Failed to fetch blocked users', err)
+        }
+    }
+
+    async function toggleBlock(userId) {
+        const config = useRuntimeConfig()
+        try {
+            const res = await $fetch(`${config.public.apiBase}/blocks/toggle`, {
+                method: 'POST',
+                body: { blocked_id: userId },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            
+            await fetchBlockedUsers()
+            return res.status
+        } catch (err) {
+            console.error('Failed to toggle block', err)
+            throw err
+        }
+    }
+
+    function isUserBlocked(userId) {
+        return blockedUsers.value.some(u => String(u.id) === String(userId))
+    }
+
     return {
         messages,
         presence,
@@ -236,13 +293,18 @@ export const useChatStore = defineStore('chat', () => {
         connected,
         loadingMessages,
         users,
+        blockedUsers,
+        blockUpdateTrigger,
         notificationPermission,
         init,
         fetchUsers,
+        fetchBlockedUsers,
         sendMessage,
         fetchHistory,
         sendRead,
         sendTyping,
+        toggleBlock,
+        isUserBlocked,
         disconnect
     }
 })

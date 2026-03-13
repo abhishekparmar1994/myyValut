@@ -32,7 +32,7 @@
               </div>
               <div class="flex-grow-1 overflow-hidden">
                 <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
-                <small class="text-muted text-truncate d-block" v-if="chat.typingUsers.has(String(user.id))">typing...</small>
+                <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
                 <small class="text-muted text-truncate d-block" v-else>Active now</small>
               </div>
             </div>
@@ -80,11 +80,24 @@
               <BAvatar v-else variant="info" :text="activeUser.name.charAt(0)" />
               <div>
                 <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
-                <small class="text-success" v-if="chat.presence[activeUser.id] === 'online'">Active Now</small>
+                <small class="text-primary fw-bold blink" v-if="chat.typingUsers[String(activeUser.id)]">typing...</small>
+                <small class="text-success" v-else-if="chat.presence[activeUser.id] === 'online'">Active Now</small>
                 <small class="text-muted" v-else>Offline</small>
               </div>
             </div>
-            <BButton variant="light" size="sm" class="rounded-circle">ℹ️</BButton>
+            <div class="d-flex align-items-center gap-2">
+              <BDropdown variant="light" size="sm" no-caret rounded="circle">
+                <template #button-content>
+                  <span class="fs-5">⋮</span>
+                </template>
+                <BDropdownItem @click="handleToggleBlock">
+                   <span v-if="isBlockedByMe">🔓 Unblock User</span>
+                   <span v-else class="text-danger">🚫 Block User</span>
+                </BDropdownItem>
+                <BDropdownDivider />
+                <BDropdownItem>ℹ️ User Info</BDropdownItem>
+              </BDropdown>
+            </div>
           </div>
 
           <!-- Messages -->
@@ -139,12 +152,28 @@
               <div class="display-4 mb-3">💬</div>
               <p>No messages yet. Say hello!</p>
             </div>
+            
+            <!-- Typing Animation -->
+            <div v-if="chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start mt-2">
+              <div class="message px-3 py-2 rounded-4 shadow-sm bg-white border text-dark d-flex align-items-center gap-2">
+                <div class="typing-dots">
+                   <span></span><span></span><span></span>
+                </div>
+                <small class="text-muted fw-bold">typing</small>
+              </div>
+            </div>
           </template>
         </div>
 
           <!-- Input -->
           <div class="p-4 bg-white border-top">
-            <BForm @submit.prevent="handleSend" class="d-flex gap-2 align-items-center position-relative">
+            <div v-if="blockStatus.is_blocked" class="text-center p-3 rounded-3 bg-light border dashed">
+              <span class="text-muted small fw-bold">
+                 <span v-if="blockStatus.blocked_by_me">You have blocked this user. Unblock them to send messages.</span>
+                 <span v-else>This user has blocked you or communication is unavailable.</span>
+              </span>
+            </div>
+            <BForm v-else @submit.prevent="handleSend" class="d-flex gap-2 align-items-center position-relative">
               <div class="emoji-picker-container" v-if="showEmojiPicker">
                 <EmojiPicker :native="true" @select="onSelectEmoji" theme="light" />
               </div>
@@ -261,15 +290,49 @@ const newMessage = ref('')
 const activeUser = ref(null)
 const messageContainer = ref(null)
 const showEmojiPicker = ref(false)
+const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocked: false })
+
+async function checkBlockStatus() {
+    if (!activeUser.value) return
+    console.log(`Checking block status with user ${activeUser.value.id}...`)
+    try {
+        const data = await $fetch(`${config.public.apiBase}/blocks/check/${activeUser.value.id}`, {
+            headers: authHeaders()
+        })
+        console.log('Block status received:', data)
+        blockStatus.value = data
+    } catch (err) {
+        console.error('Failed to check block status', err)
+    }
+}
+
+const isBlockedByMe = computed(() => {
+    return chat.isUserBlocked(activeUser.value?.id)
+})
+
+async function handleToggleBlock() {
+    if (!activeUser.value) return
+    try {
+        await chat.toggleBlock(activeUser.value.id)
+        await checkBlockStatus() // Refresh local status
+    } catch (err) {
+        console.error('Block toggle failed', err)
+    }
+}
 
 function onSelectEmoji(emoji) {
   newMessage.value += emoji.i
-  // showEmojiPicker.value = false // Optional: close on select
 }
+
+watch(() => chat.blockUpdateTrigger, () => {
+    console.log('Block update signal received from socket!')
+    checkBlockStatus()
+})
 
 watch(activeUser, async (newVal) => {
     if (newVal) {
         await chat.fetchHistory(newVal.id)
+        await checkBlockStatus()
         scrollToBottom()
     }
 })
@@ -417,10 +480,15 @@ async function handleSend() {
     }
 }
 
-let typingTimeout = null
+let lastTypingTime = 0
 function handleTyping() {
     if (!activeUser.value) return
-    chat.sendTyping(activeUser.value.id)
+    
+    const now = Date.now()
+    if (now - lastTypingTime > 2000) {
+        chat.sendTyping(activeUser.value.id)
+        lastTypingTime = now
+    }
 }
 
 function scrollToBottom() {
@@ -520,5 +588,35 @@ watch(filteredMessages, () => {
 :deep(.v3-emoji-picker) {
     border-radius: 8px;
     border: 1px solid #eee;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background-color: var(--bs-primary);
+  border-radius: 50%;
+  animation: typing 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
+}
+
+.blink {
+  animation: blink 1s infinite alternate;
+}
+
+@keyframes blink {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
 }
 </style>

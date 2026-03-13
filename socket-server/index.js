@@ -51,7 +51,7 @@ io.use((socket, next) => {
 });
 
 // Redis Subscription - Bridge from Laravel (Unchanged)
-subscriber.subscribe('laravel_database_user.*', 'laravel_database_notifications', (err, count) => {
+subscriber.subscribe('laravel_database_user.*', 'laravel_database_private-user.*', 'laravel_database_notifications', (err, count) => {
     if (err) console.error('Redis subscription error:', err);
 });
 
@@ -61,7 +61,7 @@ subscriber.on('message', (channel, message) => {
     const event = data.event;
     const payload = data.data;
 
-    if (channel.startsWith('laravel_database_user.')) {
+    if (channel.startsWith('laravel_database_user.') || channel.startsWith('laravel_database_private-user.')) {
         const userId = channel.split('.').pop();
         io.to(`user.${userId}`).emit(event, payload);
     } else if (channel === 'laravel_database_notifications') {

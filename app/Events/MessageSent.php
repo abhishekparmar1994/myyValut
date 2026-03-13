@@ -32,9 +32,9 @@ class MessageSent implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        // Broadcast on a private channel unique to the receiver
+        // Broadcast on a public channel unique to the receiver
         return [
-            new PrivateChannel('user.' . $this->receiverId),
+            new Channel('user.' . $this->receiverId),
         ];
     }
 

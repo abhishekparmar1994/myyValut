@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\MessagesController;
+use App\Http\Controllers\Api\UserBlocksController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -68,4 +69,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // File Preview with CORS
     Route::get('/messages/file/{path}', [MessagesController::class, 'getFile'])->where('path', '.*');
+
+    // Block Management
+    Route::get('/blocks', [UserBlocksController::class, 'index']);
+    Route::post('/blocks/toggle', [UserBlocksController::class, 'toggle']);
+    Route::get('/blocks/check/{userId}', [UserBlocksController::class, 'check']);
 });

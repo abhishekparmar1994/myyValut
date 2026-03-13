@@ -166,6 +166,12 @@ export const useChatStore = defineStore('chat', () => {
             } else if (payload.type === 'pin_updated') {
                 console.log('[CHAT STORE] Updating pinned message:', payload.pinned?.id)
                 pinnedMessage.value = payload.pinned
+            } else if (payload.type === 'message_deleted_everyone') {
+                console.log('[CHAT STORE] Message deleted for everyone:', payload.messageId)
+                const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                if (msg) {
+                    msg.is_deleted_everyone = true
+                }
             }
         })
     }
@@ -296,6 +302,30 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
+    async function deleteMessage(messageId, type = 'me') {
+        const config = useRuntimeConfig()
+        try {
+            const res = await $fetch(`${config.public.apiBase}/messages/${messageId}`, {
+                method: 'DELETE',
+                body: { type },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+
+            if (type === 'me') {
+                // Remove from local list
+                messages.value = messages.value.filter(m => String(m.id) !== String(messageId))
+            } else {
+                // Mark as deleted for everyone locally
+                const msg = messages.value.find(m => String(m.id) === String(messageId))
+                if (msg) msg.is_deleted_everyone = true
+            }
+            return res.status
+        } catch (err) {
+            console.error('Failed to delete message', err)
+            throw err
+        }
+    }
+
     function sendRead(receiverId) {
         if (!socket.value) return
         socket.value.emit('chat.read', { receiverId })
@@ -376,6 +406,7 @@ export const useChatStore = defineStore('chat', () => {
         toggleBlock,
         toggleReaction,
         togglePin,
+        deleteMessage,
         isUserBlocked,
         disconnect
     }

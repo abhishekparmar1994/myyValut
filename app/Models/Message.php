@@ -14,8 +14,19 @@ class Message extends Model
         'type',
         'file_name',
         'is_read',
-        'reply_to_id'
+        'reply_to_id',
+        'is_deleted_everyone'
     ];
+
+    protected $casts = [
+        'is_read' => 'boolean',
+        'is_deleted_everyone' => 'boolean'
+    ];
+
+    public function deletions()
+    {
+        return $this->hasMany(MessageDeletion::class);
+    }
 
     public function reactions()
     {

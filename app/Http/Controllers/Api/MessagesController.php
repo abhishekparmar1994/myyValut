@@ -25,6 +25,9 @@ class MessagesController extends Controller
             $query->where('sender_id', $receiverId)
                 ->where('receiver_id', $userId);
         })
+            ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
             ->with(['reactions', 'replyTo'])
             ->orderBy('created_at', 'asc')
             ->get();
@@ -140,6 +143,46 @@ class MessagesController extends Controller
             ->header('Access-Control-Allow-Origin', '*')
             ->header('Access-Control-Allow-Methods', 'GET')
             ->header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, Authorization');
+    }
+
+    public function deleteMessage(Request $request, $messageId)
+    {
+        $request->validate(['type' => 'required|in:me,everyone']);
+        $userId = $request->user()->id;
+        $message = Message::findOrFail($messageId);
+
+        if ($request->type === 'me') {
+            \App\Models\MessageDeletion::updateOrCreate([
+                'user_id' => $userId,
+                'message_id' => $messageId
+            ]);
+            return response()->json(['status' => 'deleted_for_me']);
+        }
+
+        // Delete for everyone
+        if ((int)$message->sender_id !== (int)$userId) {
+            return response()->json(['error' => 'You can only delete your own messages for everyone.'], 403);
+        }
+
+        $message->update(['is_deleted_everyone' => true]);
+
+        // Notify both participants
+        $senderId = (int)$message->sender_id;
+        $receiverId = (int)$message->receiver_id;
+
+        event(new SystemNotification([
+            'type' => 'message_deleted_everyone',
+            'messageId' => $messageId,
+            'partnerId' => $receiverId
+        ], $senderId));
+
+        event(new SystemNotification([
+            'type' => 'message_deleted_everyone',
+            'messageId' => $messageId,
+            'partnerId' => $senderId
+        ], $receiverId));
+
+        return response()->json(['status' => 'deleted_for_everyone']);
     }
 
     public function toggleReaction(Request $request, $messageId)

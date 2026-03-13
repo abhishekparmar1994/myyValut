@@ -146,6 +146,7 @@
                       <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
                       <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
                       <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
+                      <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
                       <BDropdownDivider />
                       <div class="px-2 pb-1 d-flex justify-content-around gap-2">
                         <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
@@ -158,28 +159,26 @@
                     <small class="fw-bold d-block">{{ msg.reply_to.sender_id === auth.user?.id ? 'You' : (activeUser.name || 'User') }}</small>
                     <small class="text-truncate d-block opacity-75">{{ msg.reply_to.content }}</small>
                   </div>
-
-                  <!-- Render Content based on Type -->
-                  <div v-if="msg.type === 'image'" class="media-content mb-1">
-                     <img :src="msg.content" class="img-fluid rounded-3 cursor-pointer" @click="openPreview(msg.content, msg.fileName)" style="max-height: 300px; object-fit: cover;" />
+                  <!-- Message Content -->
+                  <div v-if="msg.is_deleted_everyone" class="text-muted fst-italic small d-flex align-items-center gap-2 py-1">
+                     <span class="opacity-50">🚫</span> This message was deleted
                   </div>
-                  <div v-else-if="msg.type === 'file'" class="file-content mb-1 p-2 rounded-3 bg-opacity-10" :class="msg.senderId === auth.user?.id ? 'bg-white text-dark' : 'bg-primary text-dark'">
-                     <div class="d-flex align-items-center gap-2">
-                        <div class="file-icon fs-2">{{ getFileIcon(msg.fileName) }}</div>
-                        <div class="flex-grow-1 overflow-hidden">
-                          <div class="text-truncate fw-bold small" :class="msg.senderId === auth.user?.id ? 'text-white' : ''">{{ msg.fileName || 'Attachment' }}</div>
-                          <div class="d-flex gap-2">
-                            <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white text-opacity-75' : 'text-primary'" @click="openPreview(msg.content, msg.fileName)">
-                               View
-                            </BButton>
-                            <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" :class="msg.senderId === auth.user?.id ? 'text-white' : 'text-success'" @click="downloadFile(msg.content, msg.fileName)">
-                               Download
-                            </BButton>
-                          </div>
+                  <template v-else>
+                    <div v-if="msg.type === 'text'" class="message-text">{{ msg.content }}</div>
+                    <div v-else-if="msg.type === 'image'" class="message-image mb-1">
+                      <img :src="msg.content" class="img-fluid rounded-2 cursor-pointer" @click="openPreview(msg.content, msg.fileName)" style="max-height: 300px; object-fit: cover;" />
+                    </div>
+                    <div v-else-if="msg.type === 'file'" class="message-file p-2 rounded-2 bg-black bg-opacity-5 d-flex align-items-center gap-3">
+                      <div class="file-icon fs-3">{{ getFileIcon(msg.fileName) }}</div>
+                      <div class="flex-grow-1 overflow-hidden">
+                        <div class="fw-bold text-truncate small">{{ msg.fileName }}</div>
+                        <div class="d-flex gap-2 mt-1">
+                            <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold" @click="openPreview(msg.content, msg.fileName)">Preview</BButton>
+                            <BButton variant="link" size="sm" class="p-0 text-decoration-none small fw-bold text-success" @click="downloadFile(msg.content, msg.fileName)">Download</BButton>
                         </div>
-                     </div>
-                  </div>
-                  <div v-else class="content">{{ msg.content }}</div>
+                      </div>
+                    </div>
+                  </template>
                   
                   <div class="text-end mt-1 d-flex align-items-center justify-content-end gap-1" style="font-size: 0.65rem; opacity: 0.8">
                     {{ formatTime(msg.timestamp) }}
@@ -305,6 +304,24 @@
       </ClientOnly>
     </div>
   </BModal>
+
+  <!-- Message Deletion Modal (WhatsApp Style) -->
+  <BModal v-model="showDeleteModal" title="Delete Message?" centered hide-footer header-bg-variant="light" header-text-variant="primary" body-class="p-4">
+    <div class="text-center mb-4">
+      <p class="text-muted">Are you sure you want to delete this message?</p>
+    </div>
+    <div class="d-grid gap-2">
+      <BButton variant="outline-danger" class="rounded-3 py-2 fw-bold" @click="confirmingDeleteMessage('me')">
+        🗑️ Delete for me
+      </BButton>
+      <BButton v-if="messageToDelete?.senderId === auth.user?.id" variant="danger" class="rounded-3 py-2 fw-bold" @click="confirmingDeleteMessage('everyone')">
+        🚮 Delete for everyone
+      </BButton>
+      <BButton variant="light" class="rounded-3 py-2 mt-2" @click="showDeleteModal = false">
+        Cancel
+      </BButton>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
@@ -342,6 +359,21 @@ const activeUser = ref(null)
 const messageContainer = ref(null)
 const showEmojiPicker = ref(false)
 const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocked: false })
+
+// State for Message Deletion
+const showDeleteModal = ref(false)
+const messageToDelete = ref(null)
+
+async function confirmingDeleteMessage(type) {
+    if (!messageToDelete.value) return
+    try {
+        await chat.deleteMessage(messageToDelete.value.id, type)
+        showDeleteModal.value = false
+        messageToDelete.value = null
+    } catch (err) {
+        alert('Failed to delete message: ' + (err.response?._data?.error || err.message))
+    }
+}
 
 async function checkBlockStatus() {
     if (!activeUser.value) return

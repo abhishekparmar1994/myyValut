@@ -47,7 +47,8 @@ export const useChatStore = defineStore('chat', () => {
     function connect() {
         if (socket.value || !auth.user?.id) return
 
-        socket.value = io('http://localhost:3001', {
+        const config = useRuntimeConfig()
+        socket.value = io(config.public.socketUrl, {
             auth: { 
                 token: auth.token,
                 userId: auth.user.id 

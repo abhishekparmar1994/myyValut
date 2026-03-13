@@ -144,21 +144,33 @@
 
           <!-- Input -->
           <div class="p-4 bg-white border-top">
-            <BForm @submit.prevent="handleSend" class="d-flex gap-2 align-items-center">
-              <div class="media-upload">
-                <input type="file" ref="fileInput" class="d-none" @change="onFileSelected" />
-                <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2" :disabled="uploading">
-                  <BSpinner small v-if="uploading" />
-                  <span v-else>📎</span>
-                </BButton>
+            <BForm @submit.prevent="handleSend" class="d-flex gap-2 align-items-center position-relative">
+              <div class="emoji-picker-container" v-if="showEmojiPicker">
+                <EmojiPicker :native="true" @select="onSelectEmoji" theme="light" />
               </div>
+              
+              <div class="d-flex gap-2">
+                <BButton variant="light" @click="showEmojiPicker = !showEmojiPicker" class="rounded-circle p-2 shadow-none border-0">
+                  <span>😊</span>
+                </BButton>
+
+                <div class="media-upload">
+                  <input type="file" ref="fileInput" class="d-none" @change="onFileSelected" />
+                  <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2 shadow-none border-0" :disabled="uploading">
+                    <BSpinner small v-if="uploading" />
+                    <span v-else>📎</span>
+                  </BButton>
+                </div>
+              </div>
+
               <BFormInput 
                 v-model="newMessage" 
                 placeholder="Type a message..." 
                 class="flex-grow-1 rounded-pill border-0 bg-light px-4 py-2 shadow-none"
                 @input="handleTyping"
+                @focus="showEmojiPicker = false"
               />
-              <BButton type="submit" variant="primary" class="rounded-circle d-flex align-items-center justify-content-center p-2" style="width: 44px; height: 44px;">
+              <BButton type="submit" variant="primary" class="rounded-circle d-flex align-items-center justify-content-center p-2 shadow-none" style="width: 44px; height: 44px;">
                 ✈️
               </BButton>
             </BForm>
@@ -224,6 +236,11 @@ import { useChatStore } from '~/stores/chat'
 import VueOfficePdf from '@vue-office/pdf'
 import VueOfficeExcel from '@vue-office/excel'
 import VueOfficeDocx from '@vue-office/docx'
+
+// Import Emoji Picker
+import EmojiPicker from 'vue3-emoji-picker'
+import 'vue3-emoji-picker/css'
+
 // Import styles
 import '@vue-office/excel/lib/index.css'
 import '@vue-office/docx/lib/index.css'
@@ -243,6 +260,12 @@ const previewName = ref('')
 const newMessage = ref('')
 const activeUser = ref(null)
 const messageContainer = ref(null)
+const showEmojiPicker = ref(false)
+
+function onSelectEmoji(emoji) {
+  newMessage.value += emoji.i
+  // showEmojiPicker.value = false // Optional: close on select
+}
 
 watch(activeUser, async (newVal) => {
     if (newVal) {
@@ -480,5 +503,22 @@ watch(filteredMessages, () => {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: #d0d0d0;
+}
+
+.emoji-picker-container {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 0.5rem;
+    z-index: 1000;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Ensure picker doesn't go off context */
+:deep(.v3-emoji-picker) {
+    border-radius: 8px;
+    border: 1px solid #eee;
 }
 </style>

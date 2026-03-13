@@ -31,7 +31,12 @@
                 <span class="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle p-1" style="width: 12px; height: 12px;"></span>
               </div>
               <div class="flex-grow-1 overflow-hidden">
-                <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
+                  <BBadge v-if="chat.unreadCounts[user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+                    {{ chat.unreadCounts[user.id] }}
+                  </BBadge>
+                </div>
                 <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
                 <small class="text-muted text-truncate d-block" v-else>Active now</small>
               </div>
@@ -55,7 +60,12 @@
               />
               <BAvatar v-else variant="secondary" :text="user.name.charAt(0)" />
               <div class="flex-grow-1 overflow-hidden">
-                <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
+                  <BBadge v-if="chat.unreadCounts[user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+                    {{ chat.unreadCounts[user.id] }}
+                  </BBadge>
+                </div>
                 <small class="text-muted text-truncate d-block">Offline</small>
               </div>
             </div>

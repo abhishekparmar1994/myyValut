@@ -24,7 +24,12 @@
                 <BDropdownItem as="NuxtLink" to="/notes">📋 Notes & To-Dos</BDropdownItem>
                 <BDropdownItem as="NuxtLink" to="/vehicles">🚗 Vehicles</BDropdownItem>
                 <BDropdownItem as="NuxtLink" to="/budget">📊 Budget</BDropdownItem>
-                <BDropdownItem as="NuxtLink" to="/chat">💬 Live Chat</BDropdownItem>
+                <BDropdownItem as="NuxtLink" to="/chat" class="d-flex align-items-center justify-content-between">
+                  <span>💬 Live Chat</span>
+                  <BBadge v-if="chat.totalUnreadCount > 0" variant="danger" pill class="ms-2">
+                    {{ chat.totalUnreadCount }}
+                  </BBadge>
+                </BDropdownItem>
               </BNavItemDropdown>
               <BNavItemDropdown right>
                 <template #button-content>
@@ -71,9 +76,13 @@
 
 <script setup>
 import { useAuthStore } from '~/stores/auth'
+import { useChatStore } from '~/stores/chat'
+
 const auth = useAuthStore()
+const chat = useChatStore()
 
 onMounted(() => {
   auth.initialize()
+  chat.init()
 })
 </script>

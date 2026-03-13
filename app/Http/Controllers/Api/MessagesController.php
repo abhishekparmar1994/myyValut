@@ -98,6 +98,24 @@ class MessagesController extends Controller
         return response()->json(['status' => 'success']);
     }
 
+    public function unreadCounts(Request $request)
+    {
+        $userId = $request->user()->id;
+        
+        $counts = Message::where('receiver_id', $userId)
+            ->where('is_read', false)
+            ->where('is_deleted_everyone', false)
+            ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
+            ->groupBy('sender_id')
+            ->selectRaw('sender_id, count(*) as count')
+            ->get()
+            ->pluck('count', 'sender_id');
+
+        return response()->json($counts);
+    }
+
     public function upload(Request $request)
     {
         $request->validate([

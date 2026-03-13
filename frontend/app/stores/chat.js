@@ -17,12 +17,18 @@ export const useChatStore = defineStore('chat', () => {
     const activeUserId = ref(null)
     const blockUpdateTrigger = ref(0)
     const notificationPermission = ref('default')
+    const unreadCounts = ref({})
+
+    const totalUnreadCount = computed(() => {
+        return Object.values(unreadCounts.value).reduce((sum, count) => sum + (count || 0), 0)
+    })
 
     function init() {
         if (socket.value) return
         
         fetchUsers()
         fetchBlockedUsers()
+        fetchUnreadCounts()
 
         // Request notification permission if supported
         if (import.meta.client && 'Notification' in window) {
@@ -141,6 +147,18 @@ export const useChatStore = defineStore('chat', () => {
                 ...payload.message,
                 fromLaravel: true
             }]
+
+            // Increment unread count if it's not from me AND we're not currently looking at this chat
+            const isFromOther = payload.message.sender_id != auth.user?.id
+            const isCurrentChat = String(payload.message.sender_id) === String(activeUserId.value)
+            
+            if (isFromOther) {
+                if (!isCurrentChat) {
+                    unreadCounts.value[payload.message.sender_id] = (unreadCounts.value[payload.message.sender_id] || 0) + 1
+                } else {
+                    sendRead(payload.message.sender_id)
+                }
+            }
         })
 
         socket.value.on('system.notification', (payload) => {
@@ -330,6 +348,11 @@ export const useChatStore = defineStore('chat', () => {
     function sendRead(receiverId) {
         if (!socket.value) return
         socket.value.emit('chat.read', { receiverId })
+
+        // Reset local unread count
+        if (unreadCounts.value[receiverId]) {
+            unreadCounts.value[receiverId] = 0
+        }
         // Also hit API to persist read status
         const config = useRuntimeConfig()
         $fetch(`${config.public.apiBase}/messages/read/${receiverId}`, {
@@ -385,6 +408,18 @@ export const useChatStore = defineStore('chat', () => {
         return blockedUsers.value.some(u => String(u.id) === String(userId))
     }
 
+    async function fetchUnreadCounts() {
+        const config = useRuntimeConfig()
+        try {
+            const counts = await $fetch(`${config.public.apiBase}/messages/unread-counts`, {
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            unreadCounts.value = counts || {}
+        } catch (err) {
+            console.error('Failed to fetch unread counts', err)
+        }
+    }
+
     return {
         messages,
         presence,
@@ -395,11 +430,15 @@ export const useChatStore = defineStore('chat', () => {
         blockedUsers,
         pinnedMessage,
         replyTo,
+        activeUserId,
         blockUpdateTrigger,
         notificationPermission,
+        unreadCounts,
+        totalUnreadCount,
         init,
         fetchUsers,
         fetchBlockedUsers,
+        fetchUnreadCounts,
         sendMessage,
         fetchHistory,
         sendRead,

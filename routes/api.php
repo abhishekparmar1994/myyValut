@@ -24,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/messages/{receiverId}', [MessagesController::class, 'index']);
     Route::post('/messages', [MessagesController::class, 'store']);
     Route::post('/messages/upload', [MessagesController::class, 'upload']);
+    Route::get('/messages/unread-counts', [MessagesController::class, 'unreadCounts']);
     Route::post('/messages/read/{senderId}', [MessagesController::class, 'markAsRead']);
     Route::post('/messages/react/{messageId}', [MessagesController::class, 'toggleReaction']);
     Route::post('/messages/pin/{messageId}', [MessagesController::class, 'togglePin']);

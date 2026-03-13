@@ -1,0 +1,38 @@
+:root {
+  --primary: #0d6efd;
+  --bg-dark: #f8f9fa;
+  --font-inter: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--font-inter);
+  background-color: #f0f2f5;
+  color: #212529;
+}
+
+.navbar {
+  box-shadow: 0 2px 4px rgba(0,0,0,.08);
+}
+
+.card {
+  border: none;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-radius: 1rem;
+}
+
+@media (max-width: 576px) {
+  .card-body {
+    padding: 1.25rem;
+  }
+}
+
+.btn-primary {
+  padding: 0.6rem 1.5rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+}
+
+.gradient-bg {
+  background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+  color: white;
+}

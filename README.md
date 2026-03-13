@@ -43,8 +43,7 @@ cp .env.example .env
 # Generate application key
 php artisan key:generate
 
-# Setup database (SQLite)
-touch database/database.sqlite
+# Setup database (MySQL)
 php artisan migrate --seed
 ```
 
@@ -96,4 +95,3 @@ The database seeder creates a default account for testing:
 
 ---
 
-Made with ❤️ by Antigravity.

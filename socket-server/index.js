@@ -50,21 +50,25 @@ io.use((socket, next) => {
     next();
 });
 
-// Redis Subscription - Bridge from Laravel (Unchanged)
-subscriber.subscribe('laravel_database_user.*', 'laravel_database_private-user.*', 'laravel_database_notifications', (err, count) => {
+// Redis Subscription - Bridge from Laravel
+subscriber.psubscribe('laravel_database_user.*', 'laravel_database_private-user.*', 'laravel_database_notifications', (err, count) => {
     if (err) console.error('Redis subscription error:', err);
+    else console.log(`Subscribed to ${count} patterns`);
 });
 
-subscriber.on('message', (channel, message) => {
-    console.log(`Received message from ${channel}: ${message}`);
+subscriber.on('pmessage', (pattern, channel, message) => {
+    console.log(`Received message from ${channel} (pattern: ${pattern}): ${message}`);
     const data = JSON.parse(message);
     const event = data.event;
     const payload = data.data;
 
-    if (channel.startsWith('laravel_database_user.') || channel.startsWith('laravel_database_private-user.')) {
-        const userId = channel.split('.').pop();
+    // Remove the prefix to get the actual channel name
+    const cleanChannel = channel.replace('laravel_database_', '');
+
+    if (cleanChannel.startsWith('user.') || cleanChannel.startsWith('private-user.')) {
+        const userId = cleanChannel.split('.').pop();
         io.to(`user.${userId}`).emit(event, payload);
-    } else if (channel === 'laravel_database_notifications') {
+    } else if (cleanChannel === 'notifications') {
         io.emit(event, payload);
     }
 });

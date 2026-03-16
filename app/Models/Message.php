@@ -15,12 +15,14 @@ class Message extends Model
         'file_name',
         'is_read',
         'reply_to_id',
-        'is_deleted_everyone'
+        'is_deleted_everyone',
+        'is_edited'
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
-        'is_deleted_everyone' => 'boolean'
+        'is_deleted_everyone' => 'boolean',
+        'is_edited' => 'boolean'
     ];
 
     public function deletions()

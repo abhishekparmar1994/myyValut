@@ -166,9 +166,10 @@
                   <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
                     <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
                       <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
-                      <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
-                      <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
-                      <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
+                       <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
+                       <BDropdownItem v-if="canEdit(msg)" @click="startEditing(msg)">✏️ Edit Message</BDropdownItem>
+                       <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
+                       <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
                       <BDropdownDivider />
                       <div class="px-2 pb-1 d-flex justify-content-around gap-2">
                         <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
@@ -186,7 +187,19 @@
                      <span class="opacity-50">🚫</span> This message was deleted
                   </div>
                   <template v-else>
-                    <div v-if="msg.type === 'text'" class="message-text">{{ msg.content }}</div>
+                    <div v-if="msg.type === 'text'">
+                        <div v-if="editingMessageId === msg.id" class="edit-container mt-1">
+                            <BFormTextarea v-model="editingContent" rows="2" class="mb-2 bg-light shadow-none border-0" />
+                            <div class="d-flex gap-2 justify-content-end">
+                                <BButton size="sm" variant="light" @click="cancelEditing">Cancel</BButton>
+                                <BButton size="sm" variant="primary" :disabled="editingLoading" @click="saveEdit(msg.id)">
+                                    <BSpinner small v-if="editingLoading" />
+                                    Save
+                                </BButton>
+                            </div>
+                        </div>
+                        <div v-else class="message-text">{{ msg.content }}</div>
+                    </div>
                     <div v-else-if="msg.type === 'call'" class="message-call d-flex align-items-center gap-2 py-1" :class="{ 'text-danger fw-bold': msg.content.includes('Missed') || msg.content.includes('Rejected') }">
                       <span class="fs-5">{{ msg.content.includes('Video') ? '📹' : '📞' }}</span>
                       <span class="fw-bold">{{ msg.content }}</span>
@@ -207,6 +220,7 @@
                   </template>
                   
                   <div class="text-end mt-1 d-flex align-items-center justify-content-end gap-1" style="font-size: 0.65rem; opacity: 0.8">
+                    <span v-if="msg.is_edited" class="fst-italic opacity-75">edited • </span>
                     {{ formatTime(msg.timestamp) }}
                     <span v-if="msg.senderId === auth.user?.id" :class="msg.is_read ? 'text-info' : 'text-white-50'"> ✓✓</span>
                   </div>
@@ -464,6 +478,11 @@ const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocke
 
 // State for User Info Modal
 const showUserInfoModal = ref(false)
+
+// Edit message state
+const editingMessageId = ref(null)
+const editingContent = ref('')
+const editingLoading = ref(false)
 
 // --- WebRTC Call Logic ---
 const { 
@@ -892,6 +911,38 @@ function getLastMessagePreview(user) {
     
     if (prefix) return prefix
     return user.last_message
+}
+
+function canEdit(msg) {
+  if (msg.senderId !== auth.user?.id || msg.type !== 'text' || msg.is_deleted_everyone) return false
+  const msgTime = new Date(msg.timestamp || msg.created_at).getTime()
+  const now = new Date().getTime()
+  const diffInHours = (now - msgTime) / (1000 * 60 * 60)
+  return diffInHours < 1
+}
+
+function startEditing(msg) {
+  editingMessageId.value = msg.id
+  editingContent.value = msg.content
+}
+
+function cancelEditing() {
+  editingMessageId.value = null
+  editingContent.value = ''
+}
+
+async function saveEdit(messageId) {
+  if (!editingContent.value.trim()) return
+  editingLoading.value = true
+  try {
+    await chat.editMessage(messageId, editingContent.value)
+    cancelEditing()
+  } catch (err) {
+    console.error('Failed to edit message', err)
+    alert(err.response?._data?.error || 'Failed to edit message')
+  } finally {
+    editingLoading.value = false
+  }
 }
 
 onMounted(() => {

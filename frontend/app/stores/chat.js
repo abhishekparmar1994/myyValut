@@ -198,6 +198,18 @@ export const useChatStore = defineStore('chat', () => {
                 if (msg) {
                     msg.is_deleted_everyone = true
                 }
+            } else if (payload.type === 'message_edited') {
+                console.log('[CHAT STORE] Message edited:', payload.messageId)
+                const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                if (msg) {
+                    msg.content = payload.content
+                    msg.is_edited = true
+                }
+                // Also update last message if relevant
+                const partner = users.value.find(u => String(u.id) === String(payload.partnerId))
+                if (partner && String(partner.last_message_id) === String(payload.messageId)) {
+                    partner.last_message = payload.content
+                }
             }
         })
     }
@@ -353,6 +365,28 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
+    async function editMessage(messageId, content) {
+        const config = useRuntimeConfig()
+        try {
+            const res = await $fetch(`${config.public.apiBase}/messages/${messageId}`, {
+                method: 'PUT',
+                body: { content },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            
+            // Update local message
+            const msg = messages.value.find(m => String(m.id) === String(messageId))
+            if (msg) {
+                msg.content = content
+                msg.is_edited = true
+            }
+            return res.status
+        } catch (err) {
+            console.error('Failed to edit message', err)
+            throw err
+        }
+    }
+
     function sendRead(receiverId) {
         if (!socket.value) return
         socket.value.emit('chat.read', { receiverId })
@@ -465,6 +499,7 @@ export const useChatStore = defineStore('chat', () => {
         toggleReaction,
         togglePin,
         deleteMessage,
+        editMessage,
         isUserBlocked,
         disconnect
     }

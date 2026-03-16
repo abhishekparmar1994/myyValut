@@ -301,4 +301,48 @@ class MessagesController extends Controller
 
         return response()->json(['status' => $status, 'pinned' => $pinnedMessage]);
     }
+
+    public function editMessage(Request $request, $messageId)
+    {
+        $request->validate(['content' => 'required|string']);
+        $userId = $request->user()->id;
+        $message = Message::findOrFail($messageId);
+
+        if ((int)$message->sender_id !== (int)$userId) {
+            return response()->json(['error' => 'You can only edit your own messages.'], 403);
+        }
+
+        if ($message->is_deleted_everyone) {
+            return response()->json(['error' => 'Cannot edit a deleted message.'], 403);
+        }
+
+        // 1 hour limit
+        if ($message->created_at->diffInHours(now()) >= 1) {
+            return response()->json(['error' => 'Messages can only be edited within 1 hour of sending.'], 403);
+        }
+
+        $message->update([
+            'content' => $request->content,
+            'is_edited' => true
+        ]);
+
+        // Notify both participants
+        $senderId = (int)$message->sender_id;
+        $receiverId = (int)$message->receiver_id;
+
+        $payload = [
+            'type' => 'message_edited',
+            'messageId' => $messageId,
+            'content' => $message->content,
+            'is_edited' => true,
+            'partnerId' => $receiverId
+        ];
+
+        event(new SystemNotification($payload, $senderId));
+
+        $payload['partnerId'] = $senderId;
+        event(new SystemNotification($payload, $receiverId));
+
+        return response()->json(['status' => 'success', 'message' => $message]);
+    }
 }

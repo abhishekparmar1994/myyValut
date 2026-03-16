@@ -285,6 +285,40 @@ io.on('connection', (socket) => {
         });
     });
 
+    // --- Screen Sharing Signaling ---
+    socket.on('screenshare:invite', ({ receiverId, passcode }) => {
+        const rId = String(receiverId);
+        console.log(`[SCREENSHARE] invite from ${userId} to ${rId}`);
+        io.to(`user.${rId}`).emit('screenshare:incoming', { 
+            senderId: userId, 
+            senderName: socket.user?.name || 'User', 
+            passcode 
+        });
+    });
+
+    socket.on('screenshare:join-request', ({ senderId, passcode, username }) => {
+        const sId = String(senderId);
+        console.log(`[SCREENSHARE] join-request from ${userId} to ${sId}`);
+        io.to(`user.${sId}`).emit('screenshare:join-attempt', { 
+            receiverId: userId, 
+            username, 
+            passcode 
+        });
+    });
+
+    socket.on('screenshare:join-accept', ({ receiverId }) => {
+        const rId = String(receiverId);
+        io.to(`user.${rId}`).emit('screenshare:accepted', { senderId: userId });
+    });
+
+    socket.on('screenshare:signal', ({ to, signal }) => {
+        io.to(`user.${to}`).emit('screenshare:signal', { from: userId, signal });
+    });
+
+    socket.on('screenshare:end', ({ to }) => {
+        io.to(`user.${to}`).emit('screenshare:ended', { senderId: userId });
+    });
+
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${userId}`);
         onlineUsers.delete(userId);
@@ -293,6 +327,7 @@ io.on('connection', (socket) => {
 });
 
 const VERSION = '1.0.2';
-httpServer.listen(PORT, () => {
-    console.log(`Socket.io server v${VERSION} running on port ${PORT}`);
+const HOST = process.env.SOCKET_HOST || '0.0.0.0';
+httpServer.listen(PORT, HOST, () => {
+    console.log(`Socket.io server v${VERSION} running on ${HOST}:${PORT}`);
 });

@@ -1,6 +1,6 @@
 <template>
   <BContainer fluid class="chat-container px-4 py-3">
-    <BRow class="chat-wrapper shadow-lg rounded-4 overflow-hidden border bg-white">
+    <BRow class="chat-wrapper shadow-lg rounded-4 overflow-hidden border bg-white m-0">
       <!-- Users List -->
       <BCol md="4" lg="3" class="bg-white border-end d-flex flex-column h-100">
         <div class="p-4 border-bottom bg-light">
@@ -119,6 +119,7 @@
                 <BDropdownDivider />
                 <BDropdownItem @click="showUserInfoModal = true">ℹ️ User Info</BDropdownItem>
                 <BDropdownItem @click="openGroupCallInvite">👥 Start Group Call</BDropdownItem>
+                <BDropdownItem @click="startScreenSharing">🖥️ Share Screen</BDropdownItem>
               </BDropdown>
             </div>
           </div>
@@ -466,7 +467,7 @@
           @click="toggleUserSelection(user.id)"
         >
           <BFormCheckbox :model-value="selectedGroupUsers.includes(user.id)" @change="toggleUserSelection(user.id)" />
-          <BAvatar :src="user.profile_image ? `http://localhost:8000/storage/${user.profile_image}` : null" :text="user.name.charAt(0)" size="2.5rem" />
+          <BAvatar :src="user.profile_image ? `${config.public.apiBase.replace('/api', '')}/storage/${user.profile_image}` : null" :text="user.name.charAt(0)" size="2.5rem" />
           <div class="flex-grow-1">
             <div class="fw-bold">{{ user.name }}</div>
             <div class="small" :class="chat.presence[user.id] ? 'text-success' : 'text-muted'">{{ chat.presence[user.id] ? 'Online' : 'Offline' }}</div>
@@ -499,6 +500,85 @@
       </div>
     </div>
   </BModal>
+
+  <!-- Screen Share Initiation Modal (Initiator) -->
+  <BModal v-model="showScreenShareInvite" title="🖥️ Secure Screen Sharing" centered hide-footer no-close-on-backdrop>
+    <div class="text-center p-4">
+      <div class="display-1 mb-3">🖥️</div>
+      <h5 class="fw-bold mb-3">Your Screen Sharing Session is Ready</h5>
+      <p class="text-muted small mb-4">Share this passcode and your username with the other user to allow them to join securely.</p>
+      
+      <div class="bg-light p-3 rounded-4 mb-4 border dashed">
+        <small class="text-uppercase fw-bold text-muted d-block mb-1">Secure Passcode</small>
+        <div class="display-6 fw-bold text-primary tracking-widest">{{ screenPasscode }}</div>
+      </div>
+      
+      <BButton variant="danger" class="rounded-pill px-5 fw-bold" @click="endScreenShare">
+        Stop Sharing
+      </BButton>
+    </div>
+  </BModal>
+
+  <!-- Screen Share Join Modal (Receiver) -->
+  <BModal v-model="showScreenShareJoin" title="🖥️ Join Screen Share" centered hide-footer no-close-on-backdrop>
+    <div class="p-4">
+      <div class="text-center mb-4">
+        <div class="display-4 mb-2">🖥️</div>
+        <h5 class="fw-bold">Incoming Screen Share</h5>
+        <p class="text-muted small">Enter the passcode and your name to join the session from <strong>{{ incomingScreenSender?.senderName }}</strong>.</p>
+      </div>
+      
+      <BFormGroup label="Passcode" class="mb-3 fw-bold">
+        <BFormInput v-model="enteredPasscode" placeholder="6-digit passcode" class="rounded-3 shadow-none bg-light border-0 py-2" />
+      </BFormGroup>
+      
+      <BFormGroup label="Your Name" class="mb-4 fw-bold">
+        <BFormInput v-model="enteredUsername" placeholder="Enter your username" class="rounded-3 shadow-none bg-light border-0 py-2" />
+      </BFormGroup>
+      
+      <div class="d-flex gap-2">
+        <BButton variant="light" class="flex-grow-1 rounded-pill" @click="showScreenShareJoin = false">Cancel</BButton>
+        <BButton variant="success" class="flex-grow-1 rounded-pill fw-bold" @click="submitJoinRequest" :disabled="!enteredPasscode || !enteredUsername">
+          Join Now
+        </BButton>
+      </div>
+    </div>
+  </BModal>
+
+  <!-- Screen Share Viewer Overlay (Full Screen) -->
+  <transition name="fade">
+    <div v-if="isScreenSharing || isScreenViewing" class="screen-share-overlay position-fixed top-0 start-0 w-100 h-100 bg-black d-flex flex-column" style="z-index: 2000;">
+      <!-- Overlay Header -->
+      <div class="p-3 bg-dark bg-opacity-75 text-white d-flex justify-content-between align-items-center border-bottom border-dark">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-danger pulse-red">LIVE</span>
+            <strong v-if="isScreenSharing">Sharing your screen...</strong>
+            <strong v-else>Viewing {{ incomingScreenSender?.senderName }}'s screen</strong>
+        </div>
+        <BButton variant="danger" size="sm" class="rounded-pill px-3 fw-bold shadow" @click="endScreenShare">
+            Stop session
+        </BButton>
+      </div>
+      
+      <!-- Video Container -->
+      <div class="flex-grow-1 d-flex align-items-center justify-content-center overflow-hidden p-4">
+        <video 
+           v-if="isScreenViewing" 
+           ref="remoteScreenVideo" 
+           :srcObject="remoteScreenStream" 
+           autoplay 
+           playsinline 
+           class="max-w-100 max-h-100 shadow-lg rounded-4 border border-secondary"
+           style="background: #111; object-fit: contain;"
+        ></video>
+        <div v-else class="text-center text-white opacity-50">
+           <div class="display-1 mb-3">🖥️</div>
+           <h4>Sharing in progress</h4>
+           <p>Minimize this window to focus on your workspace</p>
+        </div>
+      </div>
+    </div>
+  </transition>
 </template>
 
 <script setup>
@@ -506,6 +586,7 @@ import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
 import { useWebRTC } from '~/composables/useWebRTC'
+import { useScreenShare } from '~/composables/useScreenShare'
 
 // Import document viewers
 
@@ -577,6 +658,43 @@ const {
   toggleMute,
   toggleVideo
 } = useWebRTC()
+
+// --- Screen Sharing Logic ---
+const {
+    localScreenStream,
+    remoteScreenStream,
+    isSharing: isScreenSharing,
+    isViewing: isScreenViewing,
+    screenPasscode,
+    startSharing: startScreenSharingCore,
+    joinSharing,
+    handleJoinAttempt,
+    handleSignal: handleScreenSignal,
+    endScreenShare: endScreenShareCore
+} = useScreenShare()
+
+const showScreenShareInvite = ref(false)
+const showScreenShareJoin = ref(false)
+const enteredPasscode = ref('')
+const enteredUsername = ref('')
+const incomingScreenSender = ref(null)
+const remoteScreenVideo = ref(null)
+
+const startScreenSharing = async () => {
+    if (!activeUser.value) return
+    try {
+        await startScreenSharingCore(activeUser.value.id)
+        showScreenShareInvite.value = true
+    } catch (err) {
+        alert('Failed to start screen share: ' + (err.message || 'Unknown error'))
+    }
+}
+
+const submitJoinRequest = async () => {
+    if (!enteredPasscode.value || !enteredUsername.value || !incomingScreenSender.value) return
+    await joinSharing(incomingScreenSender.value.senderId, enteredPasscode.value, enteredUsername.value)
+    showScreenShareJoin.value = false
+}
 
 const showIncomingCall = ref(false)
 const incomingCallerId = ref(null)
@@ -741,6 +859,37 @@ watch(() => chat.socket, (socket) => {
         groupCallRoomId.value = roomId
         groupCallType.value = type
         showIncomingGroupCall.value = true
+    })
+
+    // --- Screen Share Signaling ---
+    socket.on('screenshare:incoming', (data) => {
+        console.log('[SCREENSHARE] Incoming invitation', data)
+        incomingScreenSender.value = data
+        showScreenShareJoin.value = true
+    })
+
+    socket.on('screenshare:join-attempt', async ({ receiverId, username, passcode }) => {
+        console.log(`[SCREENSHARE] ${username} attempting to join with passcode: ${passcode}`)
+        const valid = await handleJoinAttempt(receiverId, passcode)
+        if (valid) {
+            alert(`User ${username} joined your screen share!`)
+        } else {
+            console.warn('[SCREENSHARE] Invalid passcode attempt from', username)
+        }
+    })
+
+    socket.on('screenshare:accepted', ({ senderId }) => {
+        console.log('[SCREENSHARE] Join accepted by initiator')
+        // We wait for the offer signal now
+    })
+
+    socket.on('screenshare:signal', ({ from, signal }) => {
+        handleScreenSignal(from, signal)
+    })
+
+    socket.on('screenshare:ended', () => {
+        console.log('[SCREENSHARE] Remote user ended sharing')
+        endScreenShareCore()
     })
 }, { immediate: true })
 // --- End WebRTC Call Logic ---
@@ -1083,13 +1232,17 @@ watch(filteredMessages, () => {
 
 <style scoped>
 .chat-container {
-    height: calc(100vh - 60px); /* Adjust based on navbar height */
-    max-height: calc(100vh - 60px);
+    height: calc(100vh - 110px); /* Account for navbar + main padding */
+    max-height: calc(100vh - 110px);
     overflow: hidden;
+    background: #f8fafc;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .chat-wrapper {
     height: 100%;
+    background: #ffffff;
     margin: 0;
 }
 
@@ -1112,17 +1265,6 @@ watch(filteredMessages, () => {
 .rounded-4 { border-radius: 1.25rem !important; }
 
 .scroll-smooth { scroll-behavior: smooth; }
-
-/* Custom Scrollbar */
-.chat-container {
-    background: #f8fafc;
-    min-height: calc(100vh - 80px);
-}
-
-.chat-wrapper {
-    height: calc(100vh - 120px);
-    background: #ffffff;
-}
 
 /* Glassmorphism Header */
 .glass-header {
@@ -1239,5 +1381,30 @@ watch(filteredMessages, () => {
 
 .max-w-75 {
   max-width: 80%;
+}
+.screen-share-overlay {
+  z-index: 2000;
+  backdrop-filter: blur(10px);
+}
+
+.pulse-red {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+.tracking-widest {
+  letter-spacing: 0.5rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 </style>

@@ -66,11 +66,11 @@
 
     <BToastOrchestrator />
 
-    <footer class="bg-white py-5 mt-auto border-top">
+    <!-- <footer class="bg-white py-5 mt-auto border-top">
       <BContainer class="text-center text-muted">
         <p class="mb-0">MyVault &copy; 2026. Your personal manager.</p>
       </BContainer>
-    </footer>
+    </footer> -->
   </div>
 </template>
 

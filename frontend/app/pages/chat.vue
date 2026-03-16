@@ -8,9 +8,21 @@
       <!-- Users List -->
       <BCol :md="4" :lg="3" class="bg-white border-end d-flex flex-column h-100" :class="{ 'd-none d-md-flex': chat.activeUserId || chat.activeRoomId }">
         <div class="p-4 border-bottom bg-light">
-          <h4 class="fw-bold mb-0 text-primary">Messages</h4>
-          <small class="text-muted" v-if="chat.connected">🟢 Connected</small>
-          <small class="text-danger" v-else>🔴 Disconnected</small>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h4 class="fw-bold mb-0 text-primary">Messages</h4>
+            <div class="status-indicator">
+              <small class="text-muted" v-if="chat.connected">🟢 Connected</small>
+              <small class="text-danger" v-else>🔴 Disconnected</small>
+            </div>
+          </div>
+          <div class="search-container mt-2">
+            <BFormInput 
+              v-model="userSearch" 
+              placeholder="Search contacts or groups..." 
+              size="sm" 
+              class="rounded-pill border-0 bg-white px-3 shadow-none"
+            />
+          </div>
         </div>
         <div class="px-2 pt-3 mb-2">
           <div class="d-flex mb-2 gap-1 bg-light p-1 rounded-pill border">
@@ -114,9 +126,9 @@
 
         <template v-else>
           <!-- Groups List -->
-          <div v-if="chat.rooms.length > 0">
+          <div v-if="filteredRooms.length > 0">
             <div 
-              v-for="room in chat.rooms" 
+              v-for="room in filteredRooms" 
               :key="room.id" 
               class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all"
               :class="{ 'bg-primary-subtle border-primary': chat.activeRoomId === room.id }"
@@ -178,6 +190,17 @@
               </template>
             </div>
             <div class="d-flex align-items-center gap-2">
+              <!-- Search Messages Button -->
+              <BButton 
+                variant="light" 
+                size="sm" 
+                class="rounded-circle p-2" 
+                :class="{ 'bg-primary text-white': showSearchMessages }"
+                @click="showSearchMessages = !showSearchMessages; if(!showSearchMessages) messageSearch = ''"
+              >
+                <span>🔍</span>
+              </BButton>
+
               <template v-if="!chat.activeRoomId && activeUser">
                 <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')">
                   <span>📞</span>
@@ -231,6 +254,18 @@
                View
             </BButton>
           </div>
+
+          <!-- Search Messages Bar (Collapsible) -->
+          <transition name="slide-fade">
+            <div v-if="showSearchMessages" class="bg-white border-bottom p-3 shadow-sm">
+              <BFormInput 
+                v-model="messageSearch" 
+                placeholder="Find in this conversation..." 
+                class="rounded-pill border-0 bg-light px-4 py-2 shadow-none"
+                autofocus
+              />
+            </div>
+          </transition>
 
           <!-- Messages -->
           <div class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-light scroll-smooth" ref="messageContainer">
@@ -890,6 +925,9 @@ const previewType = ref('')
 const previewName = ref('')
 
 const newMessage = ref('')
+const userSearch = ref('')
+const messageSearch = ref('')
+const showSearchMessages = ref(false)
 const activeUser = computed(() => {
     return chat.users.find(u => String(u.id) === String(chat.activeUserId)) || null
 })
@@ -1367,11 +1405,24 @@ watch([() => chat.activeUserId, () => chat.activeRoomId], async ([newUserId, new
 
 // Use store-managed users
 const onlineUsers = computed(() => {
-    return chat.users.filter(u => chat.presence[String(u.id)] === 'online' && String(u.id) !== String(auth.user?.id))
+    return chat.users.filter(u => {
+        const isOnline = chat.presence[String(u.id)] === 'online' && String(u.id) !== String(auth.user?.id)
+        if (!userSearch.value) return isOnline
+        return isOnline && u.name.toLowerCase().includes(userSearch.value.toLowerCase())
+    })
 })
 
 const offlineUsers = computed(() => {
-    return chat.users.filter(u => (!chat.presence[String(u.id)] || chat.presence[String(u.id)] === 'offline') && String(u.id) !== String(auth.user?.id))
+    return chat.users.filter(u => {
+        const isOffline = (!chat.presence[String(u.id)] || chat.presence[String(u.id)] === 'offline') && String(u.id) !== String(auth.user?.id)
+        if (!userSearch.value) return isOffline
+        return isOffline && u.name.toLowerCase().includes(userSearch.value.toLowerCase())
+    })
+})
+
+const filteredRooms = computed(() => {
+    if (!userSearch.value) return chat.rooms
+    return chat.rooms.filter(r => r.name.toLowerCase().includes(userSearch.value.toLowerCase()))
 })
 
 const uploading = ref(false)
@@ -1512,14 +1563,21 @@ function getUserColor(name) {
 const filteredMessages = computed(() => {
     if (!chat.activeUserId && !chat.activeRoomId) return []
     
+    let msgs = []
     if (chat.activeRoomId) {
-        return chat.messages.filter(m => String(m.roomId) === String(chat.activeRoomId))
+        msgs = chat.messages.filter(m => String(m.roomId) === String(chat.activeRoomId))
+    } else {
+        msgs = chat.messages.filter(m => 
+            (String(m.senderId) === String(chat.activeUserId) && String(m.receiverId) === String(auth.user?.id)) ||
+            (String(m.senderId) === String(auth.user?.id) && String(m.receiverId) === String(chat.activeUserId))
+        )
     }
-    
-    return chat.messages.filter(m => 
-        (String(m.senderId) === String(chat.activeUserId) && String(m.receiverId) === String(auth.user?.id)) ||
-        (String(m.senderId) === String(auth.user?.id) && String(m.receiverId) === String(chat.activeUserId))
-    )
+
+    if (showSearchMessages.value && messageSearch.value) {
+        return msgs.filter(m => m.content?.toLowerCase().includes(messageSearch.value.toLowerCase()))
+    }
+
+    return msgs
 })
 
 async function handleSend() {
@@ -1912,5 +1970,18 @@ watch(filteredMessages, () => {
   0% { transform: scale(0.8); opacity: 0.8; }
   50% { transform: scale(1.2); opacity: 1; }
   100% { transform: scale(0.8); opacity: 0.8; }
+}
+
+/* Slide-Fade Transition for Search Message Bar */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+.slide-fade-leave-active {
+  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
+}
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateY(-20px);
+  opacity: 0;
 }
 </style>

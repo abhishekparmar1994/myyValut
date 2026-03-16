@@ -75,7 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/transactions/{transaction}', [TransactionController::class , 'destroy']);
 
     // File Preview with CORS
-    Route::get('/messages/file/{path}', [MessagesController::class , 'getFile'])->where('path', '.*');
+    Route::get('/messages/file/{path}', [MessagesController::class , 'getFile'])->where('path', '.*')->name('api.messages.file');
 
     // Block Management
     Route::get('/blocks', [UserBlocksController::class , 'index']);

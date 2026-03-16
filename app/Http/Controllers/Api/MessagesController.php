@@ -29,11 +29,13 @@ class MessagesController extends Controller
         else {
             $query->where(function ($q) use ($userId, $id) {
                 $q->where(function ($sq) use ($userId, $id) {
-                    $sq->where('sender_id', $userId)->where('receiver_id', $id);
-                })->orWhere(function ($sq) use ($userId, $id) {
-                    $sq->where('sender_id', $id)->where('receiver_id', $userId);
-                });
-            })->whereNull('room_id');
+                        $sq->where('sender_id', $userId)->where('receiver_id', $id);
+                    }
+                    )->orWhere(function ($sq) use ($userId, $id) {
+                        $sq->where('sender_id', $id)->where('receiver_id', $userId);
+                    }
+                    );
+                })->whereNull('room_id');
         }
 
         $limit = $request->query('limit', 50);
@@ -210,14 +212,15 @@ class MessagesController extends Controller
             $originalName = $file->getClientOriginalName();
             $mime = $file->getMimeType();
             $path = $file->store('chat/media', 'public');
-            $url = asset('storage/' . $path);
+            $encryptedPath = encrypt($path);
+            $url = route('api.messages.file', ['path' => $encryptedPath]);
 
             // Determine type: 'image' or generic 'file'
             $type = str_contains($mime, 'image') ? 'image' : 'file';
 
             return response()->json([
                 'url' => $url,
-                'path' => $path,
+                'path' => $encryptedPath,
                 'name' => $originalName,
                 'type' => $type,
                 'mime' => $mime
@@ -230,10 +233,34 @@ class MessagesController extends Controller
     /**
      * Serve a file with CORS headers for in-browser previewing.
      */
-    public function getFile(Request $request, $path)
+    public function getFile(Request $request, $encryptedPath)
     {
+        try {
+            $path = decrypt($encryptedPath);
+        }
+        catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid file token'], 400);
+        }
+
         if (!Storage::disk('public')->exists($path)) {
             abort(404);
+        }
+
+        // Security Check: Is this user allowed to see this file?
+        // Check if there is any message containing this path that this user is part of
+        $userId = $request->user()->id;
+        $hasAccess = Message::where('content', 'LIKE', '%' . $path . '%')
+            ->where(function ($q) use ($userId) {
+            $q->where('sender_id', $userId)
+                ->orWhere('receiver_id', $userId)
+                ->orWhereHas('room.members', function ($sq) use ($userId) {
+                $sq->where('user_id', $userId);
+            }
+            );
+        })->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['error' => 'Unauthorized access to media'], 403);
         }
 
         $file = Storage::disk('public')->get($path);

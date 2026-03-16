@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia'
 import { io } from 'socket.io-client'
 import { useAuthStore } from './auth'
+import { encryptMessage, decryptMessage } from '../utils/encryption'
 
 export const useChatStore = defineStore('chat', () => {
     const auth = useAuthStore()
     const socket = ref(null)
     const messages = ref([])
+    const vaultKey = ref('') // Local key for E2EE
+    const isE2EELoading = ref(false)
     const presence = ref({})
     const typingUsers = ref({}) // { userId: timeoutId }
     const connected = ref(false)
@@ -125,15 +128,18 @@ export const useChatStore = defineStore('chat', () => {
                 // Check if we already have this message (deduplication)
                 const exists = messages.value.some(m => String(m.id) === String(message.id))
                 if (!exists) {
+                    const decrypted = decryptMessage(message.content, vaultKey.value)
                     messages.value = [...messages.value, {
                         ...message,
+                        content: decrypted,
                         isMe: String(message.senderId) === String(auth.user?.id)
                     }]
                 }
             }
             
             // Update last message in users/rooms list
-            updateLastMessage(message.roomId || message.senderId, message, !!message.roomId)
+            const decryptedPreview = decryptMessage(message.content, vaultKey.value)
+            updateLastMessage(message.roomId || message.senderId, { ...message, content: decryptedPreview }, !!message.roomId)
 
             // Increment unread count if it's not from me AND we're not currently looking at this chat
             const isFromOther = String(message.senderId) !== String(auth.user?.id)
@@ -230,8 +236,10 @@ export const useChatStore = defineStore('chat', () => {
             const message = payload.message
             const exists = messages.value.some(m => String(m.id) === String(message.id))
             if (!exists) {
+                const decrypted = decryptMessage(message.content, vaultKey.value)
                 messages.value = [...messages.value, {
                     ...message,
+                    content: decrypted,
                     senderId: message.sender_id, // Map for consistency
                     receiverId: message.receiver_id,
                     roomId: message.room_id,
@@ -242,7 +250,8 @@ export const useChatStore = defineStore('chat', () => {
 
             // Update last message in users/rooms list
             const targetIdForUpdate = message.room_id || message.receiver_id
-            updateLastMessage(targetIdForUpdate, message, !!message.room_id)
+            const decryptedPreview = decryptMessage(message.content, vaultKey.value)
+            updateLastMessage(targetIdForUpdate, { ...message, content: decryptedPreview }, !!message.room_id)
 
             // Increment unread count if it's not from me AND we're not currently looking at this chat
             const isFromOther = payload.message.sender_id != auth.user?.id
@@ -377,9 +386,13 @@ export const useChatStore = defineStore('chat', () => {
 
         const isGroup = !!roomId
         const eventName = isGroup ? 'chat.group.send' : 'chat.private.send'
+        
+        // Encrypt content if key exists
+        const finalContent = encryptMessage(content, vaultKey.value)
+
         const payload = isGroup 
-            ? { roomId, content, type, fileName, replyToId } 
-            : { receiverId, content, type, fileName, replyToId }
+            ? { roomId, content: finalContent, type, fileName, replyToId } 
+            : { receiverId, content: finalContent, type, fileName, replyToId }
 
         console.log(`Emitting ${eventName} to ${isGroup ? 'room ' + roomId : 'user ' + receiverId}...`, payload)
 
@@ -468,7 +481,7 @@ export const useChatStore = defineStore('chat', () => {
                 senderId: m.sender_id,
                 receiverId: m.receiver_id,
                 roomId: m.room_id,
-                content: m.content,
+                content: decryptMessage(m.content, vaultKey.value),
                 type: m.type,
                 fileName: m.file_name,
                 timestamp: m.created_at,
@@ -745,49 +758,49 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     return {
-        socket,
-        messages,
-        presence,
-        typingUsers,
         connected,
-        loadingMessages,
         users,
-        blockedUsers,
-        pinnedMessage,
-        replyTo,
+        rooms,
+        messages,
         activeUserId,
-        blockUpdateTrigger,
-        notificationPermission,
+        activeRoomId,
+        loading: loadingMessages, // Renamed for consistency
+        loadingMessages, // Kept for backward compatibility if needed
+        typingUsers,
+        presence,
         unreadCounts,
-        totalUnreadCount,
+        totalUnreadCount, // Renamed from totalUnread
         totalChatsUnread,
         totalGroupsUnread,
-        rooms,
-        activeRoomId,
+        isShaking,
+        replyTo,
+        pinnedMessage,
+        blockUpdateTrigger,
+        vaultKey,
+        isE2EELoading,
         init,
         fetchUsers,
         fetchRooms,
-        fetchBlockedUsers,
         fetchUnreadCounts,
         sendMessage,
-        fetchHistory,
-        sendRead,
         sendTyping,
-        toggleBlock,
+        fetchHistory,
         toggleReaction,
         togglePin,
         deleteMessage,
         editMessage,
+        sendRead,
+        isUserBlocked,
+        toggleBlock,
+        sendPoke,
         updateRoom,
         addRoomMembers,
         removeRoomMember,
         leaveRoom,
-        isUserBlocked,
-        updateLastMessage,
-        sendPoke,
         isShaking,
         playNotificationSound,
-        disconnect
+        disconnect,
+        setVaultKey: (key) => vaultKey.value = key,
+        clearVaultKey: () => vaultKey.value = ''
     }
-}
-)
+})

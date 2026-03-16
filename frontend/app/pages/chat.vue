@@ -9,7 +9,19 @@
       <BCol :md="4" :lg="3" class="bg-white border-end d-flex flex-column h-100" :class="{ 'd-none d-md-flex': chat.activeUserId || chat.activeRoomId }">
         <div class="p-4 border-bottom bg-light">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <h4 class="fw-bold mb-0 text-primary">Messages</h4>
+            <div class="d-flex align-items-center gap-2">
+              <h4 class="fw-bold mb-0 text-primary">Messages</h4>
+              <BButton 
+                variant="light" 
+                size="sm" 
+                class="rounded-circle p-1 border-0 shadow-sm"
+                :class="{ 'bg-success-subtle text-success': chat.vaultKey, 'bg-warning-subtle text-warning': !chat.vaultKey }"
+                @click="showVaultModal = true"
+                title="End-to-End Encryption Vault"
+              >
+                <span>{{ chat.vaultKey ? '🔒' : '🔓' }}</span>
+              </BButton>
+            </div>
             <div class="status-indicator">
               <small class="text-muted" v-if="chat.connected">🟢 Connected</small>
               <small class="text-danger" v-else>🔴 Disconnected</small>
@@ -814,6 +826,39 @@
       </div>
     </div>
   </BModal>
+  
+  <!-- Vault Encryption Modal -->
+  <BModal v-model="showVaultModal" title="🛡️ Message Vault" hide-footer centered header-bg-variant="primary" header-text-variant="white">
+    <div class="p-3 text-center">
+      <div class="mb-4">
+        <div class="bg-primary-subtle rounded-circle d-inline-flex p-4 mb-3">
+          <span class="fs-1">🔒</span>
+        </div>
+        <h5 class="fw-bold">Setup End-to-End Encryption</h5>
+        <p class="text-muted small">Enter a secret key to encrypt your messages. This key never leaves your browser.</p>
+      </div>
+
+      <BFormGroup label="Passphrase / Key" class="text-start fw-bold mb-4">
+        <BFormInput 
+          v-model="tempVaultKey" 
+          type="password" 
+          placeholder="Enter secret key..." 
+          class="rounded-3 py-2 px-3 border-0 bg-light shadow-none"
+        />
+        <small class="text-muted mt-1 d-block fw-normal">Messages will be encrypted/decrypted using this key.</small>
+      </BFormGroup>
+
+      <div class="d-grid gap-2">
+        <BButton variant="primary" size="lg" pill class="fw-bold" @click="saveVaultKey">
+          {{ chat.vaultKey ? 'Update Key' : 'Enable Encryption' }}
+        </BButton>
+        <BButton v-if="chat.vaultKey" variant="link" class="text-danger" @click="chat.clearVaultKey(); showVaultModal = false">
+          Disable Encryption
+        </BButton>
+        <BButton variant="light" pill @click="showVaultModal = false">Close</BButton>
+      </div>
+    </div>
+  </BModal>
 
   <!-- Screen Share Viewer Overlay (Full Screen) -->
   <transition name="fade">
@@ -917,6 +962,20 @@ const showNewGroupModal = ref(false)
 const showRoomInfoModal = ref(false)
 const newGroupName = ref('')
 const selectedMembersForNewGroup = ref([])
+
+const showVaultModal = ref(false)
+const tempVaultKey = ref('')
+
+function saveVaultKey() {
+    if (!tempVaultKey.value.trim()) {
+        showToast({ title: 'Error', body: 'Please enter a valid key.', variant: 'danger' })
+        return
+    }
+    chat.setVaultKey(tempVaultKey.value)
+    showVaultModal.value = false
+    tempVaultKey.value = ''
+    showToast({ title: 'Vault Updated', body: 'Your encryption key has been set securely.', variant: 'success' })
+}
 
 // State for Document Preview
 const showPreview = ref(false)

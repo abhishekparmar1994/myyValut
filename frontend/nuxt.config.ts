@@ -6,8 +6,8 @@ export default defineNuxtConfig({
   modules: ['@pinia/nuxt', '@bootstrap-vue-next/nuxt'],
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000/api',
-      socketUrl: process.env.NUXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://192.168.1.149:8000/api',
+      socketUrl: process.env.NUXT_PUBLIC_SOCKET_URL || 'http://192.168.1.149:3001'
     }
   },
   app: {

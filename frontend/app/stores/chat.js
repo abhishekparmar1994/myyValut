@@ -20,6 +20,7 @@ export const useChatStore = defineStore('chat', () => {
     const unreadCounts = ref({})
     const rooms = ref([])
     const activeRoomId = ref(null)
+    const isShaking = ref(false)
 
     const totalUnreadCount = computed(() => {
         return Object.values(unreadCounts.value).reduce((sum, count) => sum + (count || 0), 0)
@@ -129,6 +130,7 @@ export const useChatStore = defineStore('chat', () => {
             // Increment unread count if it's not from me AND we're not currently looking at this chat
             const isFromOther = String(message.senderId) !== String(auth.user?.id)
             if (isFromOther) {
+                playNotificationSound()
                 if (!isMatch) {
                     const key = message.roomId ? `room_${message.roomId}` : `user_${message.senderId}`
                     unreadCounts.value[key] = (unreadCounts.value[key] || 0) + 1
@@ -148,6 +150,33 @@ export const useChatStore = defineStore('chat', () => {
                     icon: '/favicon.ico'
                 })
             }
+        })
+
+        socket.value.on('chat.poke', ({ senderId }) => {
+            console.log('[CHAT STORE] Poke received from:', senderId)
+            isShaking.value = true
+
+            // Trigger system notification to interrupt OS focus
+            const sender = users.value.find(u => String(u.id) === String(senderId))
+            const senderName = sender ? sender.name : 'Someone'
+            showNotification(`⚠️ ATTENTION REQUIRED!`, {
+                body: `${senderName} is requesting your immediate attention!`,
+                icon: '/favicon.ico',
+                tag: 'poke',
+                requireInteraction: true // Keep on screen until user interacts
+            })
+
+            // Attempt to focus the window
+            if (import.meta.client) {
+                window.focus()
+            }
+
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200, 100, 200])
+            }
+            setTimeout(() => {
+                isShaking.value = false
+            }, 1500)
         })
 
         socket.value.on('presence.update', ({ userId, status }) => {
@@ -533,8 +562,18 @@ export const useChatStore = defineStore('chat', () => {
 
     function showNotification(title, options) {
         if (notificationPermission.value === 'granted') {
-            new Notification(title, options)
+            const n = new Notification(title, options)
+            n.onclick = () => {
+                window.focus()
+                if (n.close) n.close()
+            }
         }
+    }
+
+    function playNotificationSound() {
+        if (!import.meta.client) return
+        const audio = new Audio('/notification.wav')
+        audio.play().catch(e => console.warn('[CHAT] Audio playback failed:', e))
     }
 
     function disconnect() {
@@ -672,6 +711,11 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
+    function sendPoke(receiverId) {
+        if (!socket.value || !receiverId) return
+        socket.value.emit('chat.poke', { receiverId })
+    }
+
     return {
         socket,
         messages,
@@ -712,6 +756,9 @@ export const useChatStore = defineStore('chat', () => {
         leaveRoom,
         isUserBlocked,
         updateLastMessage,
+        sendPoke,
+        isShaking,
+        playNotificationSound,
         disconnect
     }
 }

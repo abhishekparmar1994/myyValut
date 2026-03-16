@@ -27,6 +27,8 @@ export const useNotificationStore = defineStore('notification', () => {
                 } else {
                     unreadCount.value++
                 }
+
+                chatStore.playNotificationSound()
                 
                 // Add to list if it's new
                 const note = {

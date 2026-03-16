@@ -1,5 +1,9 @@
 <template>
-  <BContainer fluid class="chat-container px-4 py-3">
+  <BContainer fluid class="chat-container px-4 py-3" :class="{ 'earthquake-shake': chat.isShaking }">
+    <!-- Poke Overlay -->
+    <div v-if="chat.isShaking" class="poke-overlay">
+       <div class="poke-text">ATTENTION!</div>
+    </div>
     <BRow class="chat-wrapper shadow-lg rounded-4 overflow-hidden border bg-white m-0">
       <!-- Users List -->
       <BCol md="4" lg="3" class="bg-white border-end d-flex flex-column h-100">
@@ -176,6 +180,10 @@
                 </BButton>
                 <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('video')">
                   <span>📹</span>
+                </BButton>
+                <!-- Poke Button -->
+                <BButton variant="warning" size="sm" class="rounded-circle p-2 shadow-sm" @click="chat.sendPoke(activeUser.id)" :disabled="chat.isShaking">
+                  <span title="Poke for attention">⚡</span>
                 </BButton>
               </template>
               <BDropdown variant="light" size="sm" no-caret rounded="circle">
@@ -1830,5 +1838,50 @@ watch(filteredMessages, () => {
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* Earthquake Shake Animation */
+.earthquake-shake {
+  animation: earthquake 0.1s infinite !important;
+  background-color: rgba(220, 53, 69, 0.05) !important;
+}
+
+@keyframes earthquake {
+  0% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(-10px, 5px) rotate(-1deg); }
+  40% { transform: translate(10px, -5px) rotate(1deg); }
+  60% { transform: translate(-10px, -2px) rotate(-0.5deg); }
+  80% { transform: translate(10px, 2px) rotate(0.5deg); }
+  100% { transform: translate(0, 0) rotate(0); }
+}
+
+.poke-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(220, 53, 69, 0.15);
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.poke-text {
+  font-size: 5rem;
+  font-weight: 900;
+  /* color: #dc3545; */
+  text-shadow: 0 0 20px rgba(0,0,0,0.5), 0 0 40px rgba(220, 53, 69, 0.8);
+  animation: poke-zoom 0.5s infinite;
+  font-family: 'Inter', sans-serif;
+}
+
+@keyframes poke-zoom {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0.8; }
 }
 </style>

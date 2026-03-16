@@ -184,6 +184,12 @@ io.on('connection', (socket) => {
     });
 
     // --- Group Messaging ---
+    socket.on('chat.poke', ({ receiverId }) => {
+        if (!receiverId) return;
+        console.log(`[SOCKET] User ${userId} pokes user ${receiverId}`);
+        io.to(`user.${receiverId}`).emit('chat.poke', { senderId: userId });
+    });
+
     socket.on('chat.group.send', async ({ roomId, content, type, fileName, replyToId }, callback) => {
         const parsedRoomId = parseInt(roomId);
         if (!parsedRoomId || !content) {

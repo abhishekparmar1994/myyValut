@@ -79,9 +79,50 @@ class AuthController extends Controller
 
     public function users(Request $request)
     {
+        $currentUserId = $request->user()->id;
+        
         return response()->json(
-            User::where('id', '!=', $request->user()->id)
+            User::where('id', '!=', $currentUserId)
                 ->select('id', 'name', 'email', 'profile_image')
+                ->addSelect(['last_message' => \App\Models\Message::select('content')
+                    ->where(function ($q) use ($currentUserId) {
+                        $q->where('sender_id', $currentUserId)
+                          ->whereColumn('receiver_id', 'users.id');
+                    })
+                    ->orWhere(function ($q) use ($currentUserId) {
+                        $q->where('receiver_id', $currentUserId)
+                          ->whereColumn('sender_id', 'users.id');
+                    })
+                    ->where('is_deleted_everyone', false)
+                    ->latest()
+                    ->limit(1)
+                ])
+                ->addSelect(['last_message_type' => \App\Models\Message::select('type')
+                    ->where(function ($q) use ($currentUserId) {
+                        $q->where('sender_id', $currentUserId)
+                          ->whereColumn('receiver_id', 'users.id');
+                    })
+                    ->orWhere(function ($q) use ($currentUserId) {
+                        $q->where('receiver_id', $currentUserId)
+                          ->whereColumn('sender_id', 'users.id');
+                    })
+                    ->where('is_deleted_everyone', false)
+                    ->latest()
+                    ->limit(1)
+                ])
+                ->addSelect(['last_message_time' => \App\Models\Message::select('created_at')
+                    ->where(function ($q) use ($currentUserId) {
+                        $q->where('sender_id', $currentUserId)
+                          ->whereColumn('receiver_id', 'users.id');
+                    })
+                    ->orWhere(function ($q) use ($currentUserId) {
+                        $q->where('receiver_id', $currentUserId)
+                          ->whereColumn('sender_id', 'users.id');
+                    })
+                    ->where('is_deleted_everyone', false)
+                    ->latest()
+                    ->limit(1)
+                ])
                 ->get()
         );
     }

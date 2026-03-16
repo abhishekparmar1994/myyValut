@@ -38,7 +38,10 @@
                   </BBadge>
                 </div>
                 <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
-                <small class="text-muted text-truncate d-block" v-else>Active now</small>
+                <div v-else class="d-flex justify-content-between align-items-center">
+                  <small class="text-muted text-truncate d-block flex-grow-1">{{ getLastMessagePreview(user) }}</small>
+                  <small class="text-muted flex-shrink-0" style="font-size: 0.65rem;">{{ formatTime(user.last_message_time) }}</small>
+                </div>
               </div>
             </div>
           </div>
@@ -66,7 +69,10 @@
                     {{ chat.unreadCounts[user.id] }}
                   </BBadge>
                 </div>
-                <small class="text-muted text-truncate d-block">Offline</small>
+                <div class="d-flex justify-content-between align-items-center">
+                  <small class="text-muted text-truncate d-block flex-grow-1">{{ getLastMessagePreview(user) }}</small>
+                  <small class="text-muted flex-shrink-0" style="font-size: 0.65rem;">{{ formatTime(user.last_message_time) }}</small>
+                </div>
               </div>
             </div>
           </div>
@@ -96,9 +102,6 @@
               </div>
             </div>
             <div class="d-flex align-items-center gap-2">
-              <BButton variant="outline-warning" size="sm" class="rounded-pill px-2 py-0 small" style="font-size: 0.7rem;" @click="showIncomingCall = true; incomingCallerName = 'System Test'; incomingCallType = 'audio'">
-                DEBUG: Test Modal
-              </BButton>
               <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')">
                 <span>📞</span>
               </BButton>
@@ -114,7 +117,7 @@
                    <span v-else class="text-danger">🚫 Block User</span>
                 </BDropdownItem>
                 <BDropdownDivider />
-                <BDropdownItem>ℹ️ User Info</BDropdownItem>
+                <BDropdownItem @click="showUserInfoModal = true">ℹ️ User Info</BDropdownItem>
               </BDropdown>
             </div>
           </div>
@@ -184,7 +187,7 @@
                   </div>
                   <template v-else>
                     <div v-if="msg.type === 'text'" class="message-text">{{ msg.content }}</div>
-                    <div v-else-if="msg.type === 'call'" class="message-call d-flex align-items-center gap-2 py-1">
+                    <div v-else-if="msg.type === 'call'" class="message-call d-flex align-items-center gap-2 py-1" :class="{ 'text-danger fw-bold': msg.content.includes('Missed') || msg.content.includes('Rejected') }">
                       <span class="fs-5">{{ msg.content.includes('Video') ? '📹' : '📞' }}</span>
                       <span class="fw-bold">{{ msg.content }}</span>
                     </div>
@@ -376,6 +379,48 @@
       </div>
     </div>
   </BModal>
+
+  <BModal v-model="showUserInfoModal" title="User Information" centered hide-footer header-bg-variant="primary" header-text-variant="white">
+    <div v-if="activeUser" class="text-center p-4">
+      <div class="position-relative d-inline-block mb-4">
+        <BAvatar 
+          v-if="activeUser.profile_image"
+          :src="getProfileImageUrl(activeUser)"
+          size="8rem"
+          variant="info"
+          class="shadow-lg border border-3 border-white"
+        />
+        <BAvatar v-else variant="info" :text="activeUser.name.charAt(0)" size="8rem" class="shadow-lg border border-3 border-white" />
+        <span 
+          class="position-absolute bottom-0 end-0 rounded-circle border border-2 border-white p-2" 
+          :class="chat.presence[String(activeUser.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
+          style="width: 24px; height: 24px;"
+        ></span>
+      </div>
+      
+      <h3 class="fw-bold mb-1">{{ activeUser.name }}</h3>
+      <p class="text-primary fw-bold mb-4">{{ activeUser.email }}</p>
+      
+      <div class="d-flex flex-column gap-2 text-start bg-light p-3 rounded-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted small">Status</span>
+          <BBadge :variant="chat.presence[String(activeUser.id)] === 'online' ? 'success' : 'secondary'" pill>
+            {{ chat.presence[String(activeUser.id)] === 'online' ? 'Online' : 'Offline' }}
+          </BBadge>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted small">Joined</span>
+          <span class="small fw-bold">{{ formatDate(activeUser.created_at) }}</span>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-top">
+        <BButton variant="outline-primary" class="rounded-pill px-4 w-100 fw-bold" @click="showUserInfoModal = false">
+          Close
+        </BButton>
+      </div>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
@@ -417,6 +462,9 @@ const messageContainer = ref(null)
 const showEmojiPicker = ref(false)
 const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocked: false })
 
+// State for User Info Modal
+const showUserInfoModal = ref(false)
+
 // --- WebRTC Call Logic ---
 const { 
   localStream, 
@@ -424,6 +472,7 @@ const {
   isCalling: isCallActive, 
   activeCallType, 
   remoteUserId,
+  isConnected,
   callDuration,
   startTime,
   startCall, 
@@ -468,23 +517,41 @@ const acceptCall = async () => {
 
 const rejectCall = () => {
     console.log(`[CALL] rejectCall: Rejecting call from ${incomingCallerId.value}`)
+    const partnerId = incomingCallerId.value
     showIncomingCall.value = false
     chat.socket?.emit('call:reject', { receiverId: incomingCallerId.value })
+    
+    // Log rejection locally
+    if (partnerId) {
+        const type = incomingCallType.value
+        const content = `${type.charAt(0).toUpperCase() + type.slice(1)} Call Rejected`
+        chat.sendMessage(partnerId, content, 'call')
+    }
+    
     incomingCallerId.value = null
 }
 
-const endCall = async () => {
-    console.log('[CALL] endCall: Terminating active call session')
+const endCall = async (reason = 'ended') => {
+    console.log(`[CALL] endCall: Terminating active call session (Reason: ${reason})`)
     const duration = callDuration.value
     const type = activeCallType.value
-    const partnerId = activeCallUser.value?.id
+    const partnerId = activeCallUser.value?.id || incomingCallerId.value
+    const wasConnected = isConnected.value
 
     endWebRTCCall()
     showIncomingCall.value = false // Ensure incoming modal also closes
 
     if (partnerId) {
         // Log the call in history
-        const content = `${type.charAt(0).toUpperCase() + type.slice(1)} Call (${duration})`
+        let content = ''
+        if (reason === 'rejected') {
+            content = `${type.charAt(0).toUpperCase() + type.slice(1)} Call Rejected`
+        } else if (!wasConnected) {
+            content = `Missed ${type.charAt(0).toUpperCase() + type.slice(1)} Call`
+        } else {
+            content = `${type.charAt(0).toUpperCase() + type.slice(1)} Call (${duration})`
+        }
+
         try {
             await chat.sendMessage(partnerId, content, 'call')
         } catch (err) {
@@ -493,6 +560,7 @@ const endCall = async () => {
     }
     
     activeCallUser.value = null
+    incomingCallerId.value = null
     resetTimer()
 }
 
@@ -533,11 +601,12 @@ watch(() => chat.socket, (socket) => {
     })
 
     socket.on('call:rejected', () => {
-        alert('Call was rejected')
-        endCall()
+        console.log('[CALL] Remote user rejected the call')
+        endCall('rejected')
     })
 
     socket.on('call:ended', () => {
+        console.log('[CALL] Remote user ended the call')
         endCall()
     })
 }, { immediate: true })
@@ -801,6 +870,28 @@ function scrollToBottom() {
 function formatTime(ts) {
     if (!ts) return ''
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDate(ts) {
+    if (!ts) return 'Unknown'
+    return new Date(ts).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function getLastMessagePreview(user) {
+    if (!user.last_message) return 'No messages yet'
+    
+    let prefix = ''
+    if (user.last_message_type === 'image') prefix = '📷 Photo'
+    else if (user.last_message_type === 'file') prefix = '📄 File'
+    else if (user.last_message_type === 'call') {
+        const content = user.last_message
+        if (content.includes('Video')) return '📹 Video Call'
+        if (content.includes('Audio')) return '📞 Audio Call'
+        return '📞 Call'
+    }
+    
+    if (prefix) return prefix
+    return user.last_message
 }
 
 onMounted(() => {

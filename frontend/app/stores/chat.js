@@ -97,6 +97,9 @@ export const useChatStore = defineStore('chat', () => {
                 messages.value = [...messages.value, message]
             }
             
+            // Update last message in users list
+            updateUserLastMessage(message.senderId, message)
+
             // Show background notification (regardless of active chat)
             if (import.meta.client && document.visibilityState === 'hidden') {
                 const sender = users.value.find(u => String(u.id) === String(message.senderId))
@@ -143,10 +146,14 @@ export const useChatStore = defineStore('chat', () => {
 
         // Bridges from Laravel (Redis -> Socket -> Client)
         socket.value.on('message.sent', (payload) => {
+            const message = payload.message
             messages.value = [...messages.value, {
-                ...payload.message,
+                ...message,
                 fromLaravel: true
             }]
+
+            // Update last message in users list
+            updateUserLastMessage(message.receiver_id, message)
 
             // Increment unread count if it's not from me AND we're not currently looking at this chat
             const isFromOther = payload.message.sender_id != auth.user?.id
@@ -234,6 +241,7 @@ export const useChatStore = defineStore('chat', () => {
                         reactions: []
                     }
                     messages.value = [...messages.value, newMsg]
+                    updateUserLastMessage(receiverId, newMsg)
                     replyTo.value = null // Clear after send
                     resolve(response)
                 } else {
@@ -417,6 +425,15 @@ export const useChatStore = defineStore('chat', () => {
             unreadCounts.value = counts || {}
         } catch (err) {
             console.error('Failed to fetch unread counts', err)
+        }
+    }
+
+    function updateUserLastMessage(userId, message) {
+        const user = users.value.find(u => String(u.id) === String(userId))
+        if (user) {
+            user.last_message = message.content
+            user.last_message_type = message.type
+            user.last_message_time = message.timestamp || message.created_at
         }
     }
 

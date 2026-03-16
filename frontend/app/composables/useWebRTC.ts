@@ -8,6 +8,7 @@ export function useWebRTC() {
     const localStream = ref<MediaStream | null>(null)
     const remoteStream = ref<MediaStream | null>(null)
     const isCalling = ref(false)
+    const isConnected = ref(false)
     const activeCallType = ref<'audio' | 'video'>('video')
     const remoteUserId = ref<string | null>(null)
     const startTime = ref<number | null>(null)
@@ -39,7 +40,10 @@ export function useWebRTC() {
         // Handle remote stream
         peerConnection.value.ontrack = (event) => {
             console.log('[WebRTC] Received remote track')
-            remoteStream.value = event.streams[0]
+            if (event.streams && event.streams[0]) {
+                remoteStream.value = event.streams[0]
+            }
+            isConnected.value = true
             
             // Start duration timer if not already started
             if (!startTime.value) {
@@ -200,6 +204,7 @@ export function useWebRTC() {
         peerConnection.value = null
 
         isCalling.value = false
+        isConnected.value = false
         remoteUserId.value = null
 
         // Stop timer
@@ -236,6 +241,7 @@ export function useWebRTC() {
         localStream,
         remoteStream,
         isCalling,
+        isConnected,
         activeCallType,
         remoteUserId,
         callDuration,

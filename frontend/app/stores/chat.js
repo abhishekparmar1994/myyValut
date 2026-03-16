@@ -21,6 +21,13 @@ export const useChatStore = defineStore('chat', () => {
     const rooms = ref([])
     const activeRoomId = ref(null)
     const isShaking = ref(false)
+    const conversationCache = ref({}) // { 'user_1': [], 'room_5': [] }
+    const lastFetched = ref({
+        users: 0,
+        rooms: 0,
+        blocks: 0,
+        unread: 0
+    })
 
     const totalUnreadCount = computed(() => {
         return Object.values(unreadCounts.value).reduce((sum, count) => sum + (count || 0), 0)
@@ -41,10 +48,11 @@ export const useChatStore = defineStore('chat', () => {
     function init() {
         if (socket.value) return
         
-        fetchUsers()
-        fetchRooms()
-        fetchBlockedUsers()
-        fetchUnreadCounts()
+        const now = Date.now()
+        if (now - lastFetched.value.users > 60000) fetchUsers()
+        if (now - lastFetched.value.rooms > 60000) fetchRooms()
+        if (now - lastFetched.value.blocks > 60000) fetchBlockedUsers()
+        if (now - lastFetched.value.unread > 30000) fetchUnreadCounts()
 
         // Request notification permission if supported
         if (import.meta.client && 'Notification' in window) {
@@ -336,6 +344,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     async function fetchUsers() {
+        lastFetched.value.users = Date.now()
         const config = useRuntimeConfig()
         try {
             const data = await $fetch(`${config.public.apiBase}/users`, {
@@ -348,6 +357,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     async function fetchRooms() {
+        lastFetched.value.rooms = Date.now()
         const config = useRuntimeConfig()
         try {
             const data = await $fetch(`${config.public.apiBase}/rooms`, {
@@ -415,10 +425,18 @@ export const useChatStore = defineStore('chat', () => {
 
     async function fetchHistory(id, isRoom = false) {
         const config = useRuntimeConfig()
-        loadingMessages.value = true
-        messages.value = [] 
-        pinnedMessage.value = null
         
+        // Caching Logic: Save previous messages if they belonged to a specific chat
+        const prevKey = activeRoomId.value ? `room_${activeRoomId.value}` : (activeUserId.value ? `user_${activeUserId.value}` : null)
+        const newKey = isRoom ? `room_${id}` : `user_${id}`
+
+        if (prevKey && prevKey !== newKey) {
+            conversationCache.value[prevKey] = [...messages.value]
+        }
+
+        loadingMessages.value = true
+
+        // Update active IDs
         if (isRoom) {
             activeRoomId.value = id
             activeUserId.value = null
@@ -427,12 +445,21 @@ export const useChatStore = defineStore('chat', () => {
             activeRoomId.value = null
         }
         
+        if (conversationCache.value[newKey]) {
+            messages.value = conversationCache.value[newKey]
+            loadingMessages.value = false // Instant view from cache
+        } else {
+            messages.value = []
+        }
+
+        pinnedMessage.value = null
+        
         try {
-            const data = await $fetch(`${config.public.apiBase}/messages/${id}?is_room=${isRoom}`, {
+            const data = await $fetch(`${config.public.apiBase}/messages/${id}?is_room=${isRoom}&limit=50`, {
                 headers: { Authorization: `Bearer ${auth.token}` }
             })
             
-            // Handle new response format { messages, pinned }
+            // Handle new response format { messages, pagination, pinned }
             const msgs = data.messages || []
             pinnedMessage.value = data.pinned || null
 
@@ -618,6 +645,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     async function fetchUnreadCounts() {
+        lastFetched.value.unread = Date.now()
         const config = useRuntimeConfig()
         try {
             const counts = await $fetch(`${config.public.apiBase}/messages/unread-counts`, {

@@ -241,7 +241,21 @@
             </div>
 
             <template v-else>
-              <template v-for="(msg, i) in filteredMessages" :key="i">
+              <!-- Empty State: No Messages -->
+              <div v-if="filteredMessages.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 py-5 text-center">
+                <div class="bg-white rounded-circle shadow-sm p-4 mb-4" style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
+                  <span class="fs-1">👋</span>
+                </div>
+                <h4 class="fw-bold mb-2">No messages here yet</h4>
+                <p class="text-muted mb-4 px-4" style="max-width: 300px;">
+                  Send a message to start a conversation with <strong>{{ activeUser?.name || activeRoom?.name }}</strong>
+                </p>
+                <BButton variant="primary" pill class="px-4 shadow-sm" @click="newMessage = 'Hello!'; $nextTick(() => $refs.newMessageInput?.focus())">
+                  Say Hello!
+                </BButton>
+              </div>
+
+              <template v-else v-for="msg in filteredMessages" :key="msg.id">
                 <!-- System/Activity Message -->
                 <div v-if="msg.type === 'system'" class="d-flex justify-content-center my-3 w-100">
                   <span class="badge bg-light text-muted border py-2 px-3 rounded-pill fw-normal shadow-sm">
@@ -253,6 +267,7 @@
                 <div 
                   v-else
                   :id="`msg-${msg.id}`"
+                  v-memo="[msg.id, msg.content, msg.is_read, msg.reactions?.length, msg.is_edited, msg.is_deleted_everyone, chat.activeUserId]"
                   class="message-wrapper d-flex mb-3 group align-items-end gap-2"
                   :class="String(msg.senderId) === String(auth.user?.id) ? 'flex-row-reverse' : 'flex-row'"
                 >
@@ -401,6 +416,7 @@
                 </div>
 
                 <BFormInput 
+                  ref="newMessageInput"
                   v-model="newMessage" 
                   placeholder="Type a message..." 
                   class="flex-grow-1 rounded-pill border-0 bg-light px-4 py-2 shadow-none"
@@ -1019,16 +1035,12 @@ const incomingScreenSender = ref(null)
 const remoteScreenVideo = ref(null)
 
 async function selectUser(user) {
-    chat.activeUserId = user.id
-    chat.activeRoomId = null
     sidebarMode.value = 'users'
     await chat.fetchHistory(user.id)
     scrollToBottom()
 }
 
 async function selectRoom(room) {
-    chat.activeRoomId = room.id
-    chat.activeUserId = null
     sidebarMode.value = 'groups'
     await chat.fetchHistory(room.id, true)
     scrollToBottom()

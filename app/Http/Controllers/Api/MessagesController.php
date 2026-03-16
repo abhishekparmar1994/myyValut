@@ -25,20 +25,28 @@ class MessagesController extends Controller
 
         if ($isRoom) {
             $query->where('room_id', $id);
-        } else {
+        }
+        else {
             $query->where(function ($q) use ($userId, $id) {
-                $q->where('sender_id', $userId)->where('receiver_id', $id);
-            })->orWhere(function ($q) use ($userId, $id) {
-                $q->where('sender_id', $id)->where('receiver_id', $userId);
+                $q->where(function ($sq) use ($userId, $id) {
+                    $sq->where('sender_id', $userId)->where('receiver_id', $id);
+                })->orWhere(function ($sq) use ($userId, $id) {
+                    $sq->where('sender_id', $id)->where('receiver_id', $userId);
+                });
             })->whereNull('room_id');
         }
 
+        $limit = $request->query('limit', 50);
+
         $messages = $query->whereDoesntHave('deletions', function ($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
+            $q->where('user_id', $userId);
+        })
             ->with(['reactions', 'replyTo', 'sender'])
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->orderBy('created_at', 'desc') // Get latest first
+            ->paginate($limit);
+
+        // Reverse for chat display
+        $messages_items = collect($messages->items())->reverse()->values();
 
         $pinned = null;
         if (!$isRoom) {
@@ -50,7 +58,12 @@ class MessagesController extends Controller
         }
 
         return response()->json([
-            'messages' => $messages,
+            'messages' => $messages_items,
+            'pagination' => [
+                'current_page' => $messages->currentPage(),
+                'last_page' => $messages->lastPage(),
+                'total' => $messages->total(),
+            ],
             'pinned' => $pinned ? $pinned->message : null
         ]);
     }
@@ -114,7 +127,8 @@ class MessagesController extends Controller
                     event(new SystemNotification($payload, $member->id));
                 }
             }
-        } else {
+        }
+        else {
             event(new SystemNotification($payload, $receiverId));
         }
 
@@ -130,7 +144,8 @@ class MessagesController extends Controller
             RoomMember::where('room_id', $id)
                 ->where('user_id', $userId)
                 ->update(['last_read_at' => now()]);
-        } else {
+        }
+        else {
             Message::where('sender_id', $id)
                 ->where('receiver_id', $userId)
                 ->where('is_read', false)
@@ -143,22 +158,22 @@ class MessagesController extends Controller
     public function unreadCounts(Request $request)
     {
         $userId = $request->user()->id;
-        
+
         // DM counts
         $counts = Message::where('receiver_id', $userId)
             ->whereNull('room_id')
             ->where('is_read', false)
             ->where('is_deleted_everyone', false)
             ->whereDoesntHave('deletions', function ($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
+            $q->where('user_id', $userId);
+        })
             ->groupBy('sender_id')
             ->selectRaw('sender_id, count(*) as count')
             ->get()
             ->pluck('count', 'sender_id')
             ->mapWithKeys(function ($count, $senderId) {
-                return ["user_$senderId" => $count];
-            })
+            return ["user_$senderId" => $count];
+        })
             ->toArray();
 
         // Room counts
@@ -167,15 +182,15 @@ class MessagesController extends Controller
             $roomUnread = Message::where('room_id', $member->room_id)
                 ->where('sender_id', '!=', $userId)
                 ->where(function ($q) use ($member) {
-                    if ($member->last_read_at) {
-                        $q->where('created_at', '>', $member->last_read_at);
-                    }
-                })
+                if ($member->last_read_at) {
+                    $q->where('created_at', '>', $member->last_read_at);
+                }
+            })
                 ->whereDoesntHave('deletions', function ($q) use ($userId) {
-                    $q->where('user_id', $userId);
-                })
+                $q->where('user_id', $userId);
+            })
                 ->count();
-            
+
             if ($roomUnread > 0) {
                 $counts["room_{$member->room_id}"] = $roomUnread;
             }
@@ -285,7 +300,8 @@ class MessagesController extends Controller
         if ($reaction) {
             $reaction->delete();
             $status = 'removed';
-        } else {
+        }
+        else {
             MessageReaction::create([
                 'message_id' => $messageId,
                 'user_id' => $userId,
@@ -295,7 +311,8 @@ class MessagesController extends Controller
         }
 
         $message = Message::with('reactions')->find($messageId);
-        if (!$message) return response()->json(['error' => 'Not found'], 404);
+        if (!$message)
+            return response()->json(['error' => 'Not found'], 404);
 
         // Notify Sender: Partner is Receiver
         event(new SystemNotification([
@@ -337,10 +354,12 @@ class MessagesController extends Controller
             $existing->delete();
             $status = 'unpinned';
             $pinnedMessage = null;
-        } else {
+        }
+        else {
             if ($existing) {
                 $existing->update(['message_id' => $messageId]);
-            } else {
+            }
+            else {
                 PinnedMessage::create([
                     'user1_id' => $u1,
                     'user2_id' => $u2,

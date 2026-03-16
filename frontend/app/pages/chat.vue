@@ -608,6 +608,7 @@ definePageMeta({ middleware: 'auth' })
 const chat = useChatStore()
 const auth = useAuthStore()
 const config = useRuntimeConfig()
+const { show: showToast } = useToast()
 
 // State for Document Preview
 const showPreview = ref(false)
@@ -686,7 +687,7 @@ const startScreenSharing = async () => {
         await startScreenSharingCore(activeUser.value.id)
         showScreenShareInvite.value = true
     } catch (err) {
-        alert('Failed to start screen share: ' + (err.message || 'Unknown error'))
+        showToast({ title: 'Screen Share Error', body: err.message || 'Failed to start screen share', variant: 'danger' })
     }
 }
 
@@ -794,7 +795,11 @@ const initGroupCall = () => {
     showGroupInviteModal.value = false
     
     // Join the room myself
-    joinGroupCall(roomId, 'video')
+    try {
+        joinGroupCall(roomId, 'video')
+    } catch (err) {
+        showToast({ title: 'Group Call Error', body: err.message || 'Failed to join group call', variant: 'danger' })
+    }
     
     // Invite others
     chat.socket.emit('call:invite-group', {
@@ -806,7 +811,11 @@ const initGroupCall = () => {
 
 const acceptGroupCall = () => {
     showIncomingGroupCall.value = false
-    joinGroupCall(groupCallRoomId.value, groupCallType.value)
+    try {
+        joinGroupCall(groupCallRoomId.value, groupCallType.value)
+    } catch (err) {
+        showToast({ title: 'Group Call Error', body: err.message || 'Failed to join group call', variant: 'danger' })
+    }
 }
 
 // Setup Socket Listeners for Calls
@@ -829,11 +838,19 @@ watch(() => chat.socket, (socket) => {
 
     socket.on('call:accepted', async ({ senderId }) => {
         console.log('[CALL] Receiver accepted call, starting WebRTC...')
-        await startCall(senderId, activeCallType.value)
+        try {
+            await startCall(senderId, activeCallType.value)
+        } catch (err) {
+            showToast({ title: 'Call Error', body: err.message || 'Failed to start call', variant: 'danger' })
+        }
     })
 
     socket.on('call:offer', async ({ senderId, offer, type }) => {
-        await handleOffer(senderId, offer, type)
+        try {
+            await handleOffer(senderId, offer, type)
+        } catch (err) {
+            showToast({ title: 'Call Error', body: err.message || 'Failed to handle incoming call', variant: 'danger' })
+        }
     })
 
     socket.on('call:answer', async ({ senderId, answer }) => {

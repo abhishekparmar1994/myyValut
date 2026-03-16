@@ -78,6 +78,11 @@ export function useScreenShare() {
     const startSharing = async (targetUserId: string) => {
         try {
             console.log(`[ScreenShare] Starting sharing with ${targetUserId}`);
+            
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                throw new Error('Screen sharing requires a secure context (HTTPS) or localhost. Please check your browser settings or use a secure connection.');
+            }
+
             sharingWith.value = targetUserId;
             
             localScreenStream.value = await navigator.mediaDevices.getDisplayMedia({

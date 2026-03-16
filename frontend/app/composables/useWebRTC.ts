@@ -131,6 +131,10 @@ export function useWebRTC() {
 
     const getLocalStream = async (type: 'audio' | 'video') => {
         try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Call features require a secure context (HTTPS) or localhost. Please check your browser settings or use a secure connection.');
+            }
+
             return await navigator.mediaDevices.getUserMedia({
                 audio: true,
                 video: type === 'video'
@@ -161,10 +165,10 @@ export function useWebRTC() {
             
             (chat.socket as any)?.emit('call:initiate', { receiverId: targetUserId, type });
             (chat.socket as any)?.emit('call:offer', { receiverId: targetUserId, offer, type });
-        } catch (err: any) {
+        } catch (err) {
             console.error('[WebRTC] Failed to start call', err);
-            alert(err.message || 'Failed to start call');
             endCall();
+            throw err;
         }
     };
 
@@ -216,10 +220,10 @@ export function useWebRTC() {
                 }
             });
 
-        } catch (err: any) {
+        } catch (err) {
             console.error('[WebRTC] Failed to join group call', err);
-            alert(err.message || 'Failed to join group call');
             leaveGroupCall();
+            throw err;
         }
     };
 
@@ -243,10 +247,10 @@ export function useWebRTC() {
                 receiverId: senderId, 
                 answer 
             });
-        } catch (err: any) {
+        } catch (err) {
             console.error('[WebRTC] Failed to handle offer', err);
-            alert(err.message || 'Failed to handle incoming call');
             endCall();
+            throw err;
         }
     };
 

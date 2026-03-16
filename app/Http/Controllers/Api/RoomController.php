@@ -139,4 +139,31 @@ class RoomController extends Controller
             return response()->json(['message' => 'Successfully left the room.']);
         });
     }
+
+    public function removeMember(Request $request, Room $room, User $user)
+    {
+        $adminMember = RoomMember::where('room_id', $room->id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$adminMember || $adminMember->role !== 'admin') {
+            return response()->json(['error' => 'Only admins can remove members.'], 403);
+        }
+
+        if ($user->id === $request->user()->id) {
+            return response()->json(['error' => 'You cannot remove yourself. Use leave instead.'], 400);
+        }
+
+        $member = RoomMember::where('room_id', $room->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$member) {
+            return response()->json(['error' => 'User is not a member of this room.'], 404);
+        }
+
+        $member->delete();
+
+        return response()->json(['message' => 'Member removed successfully.', 'room' => $room->load('members')]);
+    }
 }

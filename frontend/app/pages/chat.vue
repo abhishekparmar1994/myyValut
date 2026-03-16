@@ -149,7 +149,7 @@
             <div class="d-flex align-items-center gap-3">
               <template v-if="chat.activeRoomId">
                 <BAvatar :text="activeRoom?.name?.charAt(0)" variant="info" />
-                <div>
+                <div :class="{ 'cursor-pointer': isAdmin }" @click="isAdmin ? openManageGroup() : null">
                   <h5 class="mb-0 fw-bold">{{ activeRoom?.name }}</h5>
                   <small class="text-muted">{{ activeRoom?.members?.length }} members</small>
                 </div>
@@ -192,6 +192,7 @@
                 </template>
                 <template v-else-if="chat.activeRoomId">
                     <BDropdownItem @click="showRoomInfoModal = true">ℹ️ Group Info</BDropdownItem>
+                    <BDropdownItem v-if="isAdmin" @click="openManageGroup">⚙️ Manage Group</BDropdownItem>
                 </template>
               </BDropdown>
             </div>
@@ -531,6 +532,87 @@
     </div>
   </BModal>
 
+  <!-- Manage Group Modal -->
+  <BModal v-model="showManageGroupModal" title="⚙️ Manage Group" centered hide-footer size="lg" scrollable>
+    <div v-if="activeRoom" class="p-3">
+      <!-- Edit Name Section -->
+      <div class="mb-4">
+        <label class="form-label fw-bold">Group Name</label>
+        <div class="d-flex gap-2">
+          <BFormInput v-model="editedGroupName" placeholder="Enter group name" class="rounded-pill px-3" />
+          <BButton variant="primary" class="rounded-pill px-4 fw-bold" @click="handleUpdateGroup" :disabled="!editedGroupName.trim() || editedGroupName === activeRoom.name">
+            Save
+          </BButton>
+        </div>
+      </div>
+
+      <hr />
+
+      <!-- Members Section -->
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold mb-0">Group Members ({{ activeRoom.members.length }})</h6>
+        </div>
+        
+        <div class="user-list-inline mb-3 border rounded-4 p-2 bg-light" style="max-height: 250px; overflow-y: auto;">
+          <div v-for="member in activeRoom.members" :key="member.id" class="d-flex align-items-center justify-content-between p-2 hover-bg rounded-3">
+            <div class="d-flex align-items-center gap-3">
+              <BAvatar :src="getProfileImageUrl(member)" :text="member.name.charAt(0)" size="2.5rem" />
+              <div>
+                <div class="fw-bold fw-bold">{{ member.name }}</div>
+                <small class="text-muted">{{ member.pivot?.role }}</small>
+              </div>
+            </div>
+            <BButton 
+              v-if="member.id !== auth.user?.id && isAdmin" 
+              variant="outline-danger" 
+              size="sm" 
+              class="rounded-pill px-3"
+              @click="handleRemoveMember(member.id)"
+            >
+              Remove
+            </BButton>
+            <BBadge v-else-if="member.id === auth.user?.id" variant="secondary" pill>You</BBadge>
+          </div>
+        </div>
+
+        <div v-if="isAdmin" class="mt-4 pt-3 border-top">
+          <h6 class="fw-bold mb-3">Add New Members</h6>
+          <div class="user-selection-list mb-3" style="max-height: 200px; overflow-y: auto;">
+             <div 
+               v-for="user in availableUsersToAdd" 
+               :key="user.id" 
+               class="d-flex align-items-center gap-3 p-2 rounded-3 cursor-pointer mb-1 transition-all"
+               @click="toggleAddMember(user.id)"
+               :class="membersToAdd.includes(user.id) ? 'bg-primary-subtle' : 'hover-bg'"
+             >
+               <BFormCheckbox :model-value="membersToAdd.includes(user.id)" />
+               <BAvatar :src="getProfileImageUrl(user)" :text="user.name.charAt(0)" size="2rem" />
+               <span class="fw-bold small">{{ user.name }}</span>
+             </div>
+          </div>
+          <BButton 
+            variant="success" 
+            class="w-100 rounded-pill fw-bold" 
+            @click="handleAddMembers" 
+            :disabled="membersToAdd.length === 0"
+          >
+            ➕ Add Selected Members
+          </BButton>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-top d-flex gap-2">
+        <BButton variant="outline-danger" class="flex-grow-1 rounded-pill fw-bold" @click="handleLeaveGroup">
+          🚪 Leave Group
+        </BButton>
+        <BButton variant="secondary" class="flex-grow-1 rounded-pill" @click="showManageGroupModal = false">
+          Close
+        </BButton>
+      </div>
+    </div>
+  </BModal>
+
   <!-- Group Call Invite Modal -->
   <BModal v-model="showGroupInviteModal" title="👥 Start Group Call" centered hide-footer scrollable>
     <div class="p-2">
@@ -754,6 +836,75 @@ const showIncomingGroupCall = ref(false)
 const selectedGroupUsers = ref([])
 const groupCallRoomId = ref('')
 const groupCallType = ref('video')
+
+// Group Management State
+const showManageGroupModal = ref(false)
+const editedGroupName = ref('')
+const editedGroupDescription = ref('')
+const membersToAdd = ref([])
+
+const isAdmin = computed(() => {
+    if (!activeRoom.value) return false
+    const me = activeRoom.value.members.find(m => String(m.id) === String(auth.user?.id))
+    return me?.pivot?.role === 'admin'
+})
+
+const availableUsersToAdd = computed(() => {
+    if (!activeRoom.value) return []
+    const memberIds = activeRoom.value.members.map(m => m.id)
+    return chat.users.filter(u => !memberIds.includes(u.id))
+})
+
+function openManageGroup() {
+    if (!activeRoom.value) return
+    editedGroupName.value = activeRoom.value.name
+    editedGroupDescription.value = activeRoom.value.description || ''
+    membersToAdd.value = []
+    showManageGroupModal.value = true
+}
+
+async function handleUpdateGroup() {
+    try {
+        await chat.updateRoom(chat.activeRoomId, editedGroupName.value, editedGroupDescription.value)
+    } catch (err) {
+        alert('Failed to update group: ' + err.message)
+    }
+}
+
+function toggleAddMember(userId) {
+    const idx = membersToAdd.value.indexOf(userId)
+    if (idx > -1) membersToAdd.value.splice(idx, 1)
+    else membersToAdd.value.push(userId)
+}
+
+async function handleAddMembers() {
+    try {
+        await chat.addRoomMembers(chat.activeRoomId, membersToAdd.value)
+        membersToAdd.value = []
+    } catch (err) {
+        alert('Failed to add members: ' + err.message)
+    }
+}
+
+async function handleRemoveMember(userId) {
+    if (!confirm('Are you sure you want to remove this member?')) return
+    try {
+        await chat.removeRoomMember(chat.activeRoomId, userId)
+    } catch (err) {
+        alert('Failed to remove member: ' + err.message)
+    }
+}
+
+async function handleLeaveGroup() {
+    if (!confirm('Are you sure you want to leave this group?')) return
+    try {
+        await chat.leaveRoom(chat.activeRoomId)
+        showManageGroupModal.value = false
+        chat.activeRoomId = null
+    } catch (err) {
+        alert('Failed to leave group: ' + err.message)
+    }
+}
 
 function toggleMemberSelection(userId) {
     const idx = selectedMembersForNewGroup.value.indexOf(userId)
@@ -1609,5 +1760,12 @@ watch(filteredMessages, () => {
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+.hover-bg:hover {
+  background-color: rgba(0,0,0,0.05) !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
 }
 </style>

@@ -87,5 +87,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/rooms/{room}', [RoomController::class , 'show']);
     Route::put('/rooms/{room}', [RoomController::class , 'update']);
     Route::post('/rooms/{room}/add-members', [RoomController::class , 'addMembers']);
+    Route::post('/rooms/{room}/remove-member/{user}', [RoomController::class , 'removeMember']);
     Route::post('/rooms/{room}/leave', [RoomController::class , 'leave']);
 });

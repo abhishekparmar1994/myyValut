@@ -569,6 +569,70 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
+    async function updateRoom(roomId, name, description) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/rooms/${roomId}`, {
+                method: 'PUT',
+                body: { name, description },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            const idx = rooms.value.findIndex(r => String(r.id) === String(roomId))
+            if (idx !== -1) rooms.value[idx] = { ...rooms.value[idx], ...data }
+            return data
+        } catch (err) {
+            console.error('Failed to update room', err)
+            throw err
+        }
+    }
+
+    async function addRoomMembers(roomId, userIds) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/rooms/${roomId}/add-members`, {
+                method: 'POST',
+                body: { user_ids: userIds },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            const idx = rooms.value.findIndex(r => String(r.id) === String(roomId))
+            if (idx !== -1) rooms.value[idx] = data
+            return data
+        } catch (err) {
+            console.error('Failed to add members', err)
+            throw err
+        }
+    }
+
+    async function removeRoomMember(roomId, userId) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/rooms/${roomId}/remove-member/${userId}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            const idx = rooms.value.findIndex(r => String(r.id) === String(roomId))
+            if (idx !== -1) rooms.value[idx] = data.room
+            return data
+        } catch (err) {
+            console.error('Failed to remove member', err)
+            throw err
+        }
+    }
+
+    async function leaveRoom(roomId) {
+        const config = useRuntimeConfig()
+        try {
+            await $fetch(`${config.public.apiBase}/rooms/${roomId}/leave`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            rooms.value = rooms.value.filter(r => String(r.id) !== String(roomId))
+        } catch (err) {
+            console.error('Failed to leave room', err)
+            throw err
+        }
+    }
+
     return {
         socket,
         messages,
@@ -603,6 +667,10 @@ export const useChatStore = defineStore('chat', () => {
         togglePin,
         deleteMessage,
         editMessage,
+        updateRoom,
+        addRoomMembers,
+        removeRoomMember,
+        leaveRoom,
         isUserBlocked,
         updateLastMessage,
         disconnect

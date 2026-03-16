@@ -193,6 +193,8 @@
                 <template v-else-if="chat.activeRoomId">
                     <BDropdownItem @click="showRoomInfoModal = true">ℹ️ Group Info</BDropdownItem>
                     <BDropdownItem v-if="isAdmin" @click="openManageGroup">⚙️ Manage Group</BDropdownItem>
+                    <BDropdownDivider />
+                    <BDropdownItem @click="handleLeaveGroup" class="text-danger">🚪 Leave Group</BDropdownItem>
                 </template>
               </BDropdown>
             </div>
@@ -607,6 +609,45 @@
           🚪 Leave Group
         </BButton>
         <BButton variant="secondary" class="flex-grow-1 rounded-pill" @click="showManageGroupModal = false">
+          Close
+        </BButton>
+      </div>
+    </div>
+  </BModal>
+
+  <!-- Group Info Modal (For all members) -->
+  <BModal v-model="showRoomInfoModal" title="ℹ️ Group Info" centered hide-footer scrollable>
+    <div v-if="activeRoom" class="p-3">
+      <div class="text-center mb-4">
+        <BAvatar :text="activeRoom.name.charAt(0)" variant="primary" size="6rem" class="shadow mb-3" />
+        <h4 class="fw-bold mb-1">{{ activeRoom.name }}</h4>
+        <p class="text-muted small">{{ activeRoom.members.length }} members</p>
+      </div>
+
+      <div v-if="activeRoom.description" class="mb-4 bg-light p-3 rounded-4">
+        <small class="text-uppercase fw-bold text-muted d-block mb-1" style="font-size: 0.7rem;">Description</small>
+        <p class="mb-0">{{ activeRoom.description }}</p>
+      </div>
+
+      <h6 class="fw-bold mb-3">Participants</h6>
+      <div class="user-list-inline mb-4 border rounded-4 p-2 bg-light" style="max-height: 300px; overflow-y: auto;">
+        <div v-for="member in activeRoom.members" :key="member.id" class="d-flex align-items-center justify-content-between p-2">
+          <div class="d-flex align-items-center gap-3">
+            <BAvatar :src="getProfileImageUrl(member)" :text="member.name.charAt(0)" size="2.5rem" />
+            <div>
+              <div class="fw-bold small">{{ member.name }}</div>
+              <small class="text-muted">{{ member.pivot?.role }}</small>
+            </div>
+          </div>
+          <BBadge v-if="member.id === auth.user?.id" variant="secondary" pill>You</BBadge>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <BButton variant="outline-danger" class="rounded-pill fw-bold" @click="handleLeaveGroup">
+          🚪 Leave Group
+        </BButton>
+        <BButton variant="light" class="rounded-pill" @click="showRoomInfoModal = false">
           Close
         </BButton>
       </div>

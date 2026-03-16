@@ -43,6 +43,16 @@ class RoomController extends Controller
                 $room->members()->attach($id, ['role' => 'member']);
             }
 
+            // Create system message
+            $sysMsg = \App\Models\Message::create([
+                'room_id' => $room->id,
+                'sender_id' => $request->user()->id,
+                'content' => $request->user()->name . " created the group \"" . $request->name . "\"",
+                'type' => 'system'
+            ]);
+
+            $this->broadcastSystemMessage($room, $sysMsg);
+
             return response()->json($room->load('members'), 201);
         });
     }
@@ -92,6 +102,16 @@ class RoomController extends Controller
         foreach ($request->user_ids as $userId) {
             if (!$room->members()->where('users.id', $userId)->exists()) {
                 $room->members()->attach($userId, ['role' => 'member']);
+                $addedUser = User::find($userId);
+                if ($addedUser) {
+                    $sysMsg = \App\Models\Message::create([
+                        'room_id' => $room->id,
+                        'sender_id' => $request->user()->id,
+                        'content' => $request->user()->name . " added " . $addedUser->name,
+                        'type' => 'system'
+                    ]);
+                    $this->broadcastSystemMessage($room, $sysMsg);
+                }
             }
         }
 
@@ -109,7 +129,7 @@ class RoomController extends Controller
             return response()->json(['error' => 'You are not a member of this room.'], 404);
         }
 
-        return DB::transaction(function () use ($room, $member, $userId) {
+        return DB::transaction(function () use ($room, $member, $userId, $request) {
             $role = $member->role;
             $member->delete();
 
@@ -131,10 +151,15 @@ class RoomController extends Controller
                 }
             }
 
-            // If no members left, optionally delete room? For now keep it.
-            if ($room->members()->count() === 0) {
-                // $room->delete();
-            }
+            // Create system message
+            $sysMsg = \App\Models\Message::create([
+                'room_id' => $room->id,
+                'sender_id' => $userId,
+                'content' => $request->user()->name . " left the group",
+                'type' => 'system'
+            ]);
+
+            $this->broadcastSystemMessage($room, $sysMsg, [$userId]);
 
             return response()->json(['message' => 'Successfully left the room.']);
         });
@@ -162,8 +187,44 @@ class RoomController extends Controller
             return response()->json(['error' => 'User is not a member of this room.'], 404);
         }
 
-        $member->delete();
+        $room->members()->detach($user->id);
 
-        return response()->json(['message' => 'Member removed successfully.', 'room' => $room->load('members')]);
+        // Create system message
+        $sysMsg = \App\Models\Message::create([
+            'room_id' => $room->id,
+            'sender_id' => $request->user()->id,
+            'content' => $request->user()->name . " removed " . $user->name,
+            'type' => 'system'
+        ]);
+
+        $this->broadcastSystemMessage($room, $sysMsg, [$user->id]);
+
+        return response()->json(['message' => 'User removed successfully', 'room' => $room->load('members')]);
+    }
+
+    private function broadcastSystemMessage($room, $message, $extraUserIds = [])
+    {
+        $message->load(['sender']);
+        $room->load('members');
+        $payload = [
+            'type' => 'message_received',
+            'message' => [
+                'id' => $message->id,
+                'senderId' => $message->sender_id,
+                'receiverId' => null,
+                'roomId' => $message->room_id,
+                'content' => $message->content,
+                'type' => $message->type,
+                'timestamp' => $message->created_at,
+                'sender' => $message->sender
+            ],
+            'room' => $room
+        ];
+
+        $targetIds = $room->members->pluck('id')->merge($extraUserIds)->unique();
+
+        foreach ($targetIds as $userId) {
+            event(new \App\Events\SystemNotification($payload, $userId));
+        }
     }
 }

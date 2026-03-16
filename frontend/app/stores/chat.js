@@ -226,44 +226,81 @@ export const useChatStore = defineStore('chat', () => {
         socket.value.on('system.notification', (payload) => {
             console.log('[CHAT STORE] System Notification Received:', payload)
             
-            // PartnerId check: Is this update relevant to the contact Alice is CURRENTLY talking to?
-            const currentPartner = String(activeUserId.value)
-            const incomingPartner = String(payload.partnerId)
-            
-            if (!activeUserId.value || incomingPartner !== currentPartner) {
-                console.log(`[CHAT STORE] Ignored notification: Active(${currentPartner}) vs Payload(${incomingPartner})`)
+            // Special handling for room membership/activity updates
+            if (payload.type === 'message_received' && payload.room) {
+                // Check if current user is still a member
+                const isMember = payload.room.members?.some(m => String(m.id) === String(auth.user?.id))
+                
+                if (!isMember) {
+                    // Remove room from local list if we are no longer a member (kicked or left)
+                    rooms.value = rooms.value.filter(r => String(r.id) !== String(payload.room.id))
+                    if (String(payload.room.id) === String(activeRoomId.value)) {
+                        activeRoomId.value = null
+                    }
+                    console.log(`[CHAT STORE] Removed from room ${payload.room.id}`)
+                    return
+                }
+
+                const idx = rooms.value.findIndex(r => String(r.id) === String(payload.room.id))
+                if (idx !== -1) {
+                    rooms.value[idx] = { ...rooms.value[idx], ...payload.room }
+                } else {
+                    // It's a new room for us (e.g., someone added us to a group)
+                    rooms.value = [payload.room, ...rooms.value]
+                }
+                
+                if (payload.message) {
+                    const message = payload.message
+                    const isMatch = String(message.roomId) === String(activeRoomId.value)
+                    if (isMatch) {
+                        const exists = messages.value.some(m => String(m.id) === String(message.id))
+                        if (!exists) {
+                            messages.value = [...messages.value, {
+                                ...message,
+                                isMe: String(message.senderId) === String(auth.user?.id)
+                            }]
+                        }
+                    }
+                    updateLastMessage(message.roomId, message, true)
+                }
                 return
             }
 
-            if (payload.type === 'reaction_updated') {
-                console.log('[CHAT STORE] Updating reactions for msg:', payload.messageId)
-                // Use type-agnostic comparison for message IDs
-                const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                if (msg) {
-                    msg.reactions = payload.reactions
-                } else {
-                    console.warn('[CHAT STORE] Message not found for reaction update:', payload.messageId)
+            // PartnerId check: Is this update relevant to the contact Alice is CURRENTLY talking to?
+            const currentPartner = String(activeUserId.value)
+            const incomingPartner = String(payload.partnerId || (payload.message ? payload.message.sender_id : ''))
+            
+            if (activeUserId.value && incomingPartner === currentPartner) {
+                if (payload.type === 'reaction_updated') {
+                    console.log('[CHAT STORE] Updating reactions for msg:', payload.messageId)
+                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                    if (msg) msg.reactions = payload.reactions
+                } else if (payload.type === 'pin_updated') {
+                    pinnedMessage.value = payload.pinned
+                } else if (payload.type === 'message_deleted_everyone') {
+                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                    if (msg) msg.is_deleted_everyone = true
+                } else if (payload.type === 'message_edited') {
+                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                    if (msg) {
+                        msg.content = payload.content
+                        msg.is_edited = true
+                    }
+                    const partner = users.value.find(u => String(u.id) === String(payload.partnerId))
+                    if (partner && String(partner.last_message_id) === String(payload.messageId)) {
+                        partner.last_message = payload.content
+                    }
                 }
-            } else if (payload.type === 'pin_updated') {
-                console.log('[CHAT STORE] Updating pinned message:', payload.pinned?.id)
-                pinnedMessage.value = payload.pinned
-            } else if (payload.type === 'message_deleted_everyone') {
-                console.log('[CHAT STORE] Message deleted for everyone:', payload.messageId)
-                const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                if (msg) {
-                    msg.is_deleted_everyone = true
-                }
-            } else if (payload.type === 'message_edited') {
-                console.log('[CHAT STORE] Message edited:', payload.messageId)
-                const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                if (msg) {
-                    msg.content = payload.content
-                    msg.is_edited = true
-                }
-                // Also update last message if relevant
-                const partner = users.value.find(u => String(u.id) === String(payload.partnerId))
-                if (partner && String(partner.last_message_id) === String(payload.messageId)) {
-                    partner.last_message = payload.content
+            } else if (activeRoomId.value && payload.roomId && String(payload.roomId) === String(activeRoomId.value)) {
+                // Room specific updates (reactions, pins in groups)
+                if (payload.type === 'reaction_updated') {
+                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                    if (msg) msg.reactions = payload.reactions
+                } else if (payload.type === 'pin_updated') {
+                    pinnedMessage.value = payload.pinned
+                } else if (payload.type === 'message_deleted_everyone') {
+                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
+                    if (msg) msg.is_deleted_everyone = true
                 }
             }
         })
@@ -326,7 +363,8 @@ export const useChatStore = defineStore('chat', () => {
                             reply_to: replyTo.value,
                             timestamp: response.timestamp,
                             isMe: true,
-                            reactions: []
+                            reactions: [],
+                            sender: auth.user
                         }
                         messages.value = [...messages.value, newMsg]
                     }
@@ -382,7 +420,8 @@ export const useChatStore = defineStore('chat', () => {
                 is_read: m.is_read,
                 reactions: m.reactions || [],
                 reply_to: m.reply_to || null,
-                reply_to_id: m.reply_to_id
+                reply_to_id: m.reply_to_id,
+                sender: m.sender
             }))
 
             messages.value = historical

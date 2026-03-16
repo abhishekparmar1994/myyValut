@@ -229,43 +229,51 @@
             </div>
 
             <template v-else>
-              <div 
-                v-for="(msg, i) in filteredMessages" 
-                :key="i"
-                :id="`msg-${msg.id}`"
-                class="message-wrapper d-flex mb-3 group align-items-end gap-2"
-                :class="String(msg.senderId) === String(auth.user?.id) ? 'flex-row-reverse' : 'flex-row'"
-              >
-                <!-- Message Avatar -->
-                <BAvatar 
-                  size="2.5rem" 
-                  :src="String(msg.senderId) === String(auth.user?.id) ? getProfileImageUrl(auth.user) : (msg.roomId ? getProfileImageUrl(msg.sender) : (activeUser ? getProfileImageUrl(activeUser) : null))" 
-                  :text="String(msg.senderId) === String(auth.user?.id) ? auth.user?.name?.charAt(0) : (msg.roomId ? msg.sender?.name?.charAt(0) : (activeUser ? activeUser.name?.charAt(0) : 'U'))"
-                  variant="light"
-                  class="flex-shrink-0 shadow-sm border border-white mb-1"
-                />
+              <template v-for="(msg, i) in filteredMessages" :key="i">
+                <!-- System/Activity Message -->
+                <div v-if="msg.type === 'system'" class="d-flex justify-content-center my-3 w-100">
+                  <span class="badge bg-light text-muted border py-2 px-3 rounded-pill fw-normal shadow-sm">
+                    {{ msg.content }}
+                  </span>
+                </div>
 
+                <!-- Regular Message -->
                 <div 
-                  class="message px-3 py-2 shadow-sm max-w-75 position-relative group"
-                  :style="String(msg.senderId) === String(auth.user?.id) ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
-                  :class="String(msg.senderId) === String(auth.user?.id) ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
+                  v-else
+                  :id="`msg-${msg.id}`"
+                  class="message-wrapper d-flex mb-3 group align-items-end gap-2"
+                  :class="String(msg.senderId) === String(auth.user?.id) ? 'flex-row-reverse' : 'flex-row'"
                 >
-                  <div v-if="msg.roomId && String(msg.senderId) !== String(auth.user?.id)" class="small fw-bold mb-1 text-primary">
-                    {{ msg.sender?.name }}
-                  </div>
-                  <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
-                    <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
-                      <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
-                       <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
-                       <BDropdownItem v-if="canEdit(msg)" @click="startEditing(msg)">✏️ Edit Message</BDropdownItem>
-                       <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
-                       <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
-                      <BDropdownDivider />
-                      <div class="px-2 pb-1 d-flex justify-content-around gap-2">
-                        <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
-                      </div>
-                    </BDropdown>
-                  </div>
+                  <!-- Message Avatar -->
+                  <BAvatar 
+                    size="2.5rem" 
+                    :src="String(msg.senderId) === String(auth.user?.id) ? getProfileImageUrl(auth.user) : (msg.roomId ? getProfileImageUrl(msg.sender) : (activeUser ? getProfileImageUrl(activeUser) : null))" 
+                    :text="String(msg.senderId) === String(auth.user?.id) ? auth.user?.name?.charAt(0) : (msg.roomId ? msg.sender?.name?.charAt(0) : (activeUser ? activeUser.name?.charAt(0) : 'U'))"
+                    variant="light"
+                    class="flex-shrink-0 shadow-sm border border-white mb-1"
+                  />
+  
+                  <div 
+                    class="message px-3 py-2 shadow-sm max-w-75 position-relative group"
+                    :style="String(msg.senderId) === String(auth.user?.id) ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
+                    :class="String(msg.senderId) === String(auth.user?.id) ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
+                  >
+                    <div v-if="msg.roomId && String(msg.senderId) !== String(auth.user?.id)" class="small fw-bold mb-1" :style="{ color: getUserColor(msg.sender?.name) }">
+                      {{ msg.sender?.name }}
+                    </div>
+                    <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
+                      <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
+                        <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
+                         <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
+                         <BDropdownItem v-if="canEdit(msg)" @click="startEditing(msg)">✏️ Edit Message</BDropdownItem>
+                         <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
+                         <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
+                        <BDropdownDivider />
+                        <div class="px-2 pb-1 d-flex justify-content-around gap-2">
+                          <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
+                        </div>
+                      </BDropdown>
+                    </div>
 
                   <!-- Reply Preview inside message -->
                   <div v-if="msg.reply_to" class="mb-2 p-2 rounded-3 bg-black bg-opacity-10 border-start border-3" :class="msg.senderId === auth.user?.id ? 'border-light-subtle' : 'border-primary'" style="cursor: pointer" @click="scrollToMessage(msg.reply_to_id)">
@@ -323,6 +331,7 @@
                   </div>
                 </div>
               </div>
+            </template>
 
                <!-- Typing Animation (only in 1-to-1 chat when activeUser exists) -->
               <div v-if="activeUser && chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start align-items-end gap-2 mt-2">
@@ -1461,6 +1470,19 @@ function authHeaders() {
 function getProfileImageUrl(user) {
     if (!user) return null
     return user.profile_image_url || null
+}
+
+function getUserColor(name) {
+    if (!name) return '#000000'
+    const colors = [
+        '#1f2937', '#1d4ed8', '#7e22ce', '#be185d', 
+        '#b91c1c', '#c2410c', '#15803d', '#0369a1'
+    ]
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return colors[Math.abs(hash) % colors.length]
 }
 
 const filteredMessages = computed(() => {

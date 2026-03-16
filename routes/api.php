@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\UserBlocksController;
 use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\NotificationController;
 
 Route::post('/register', [AuthController::class , 'register']);
 Route::post('/login', [AuthController::class , 'login']);
@@ -89,4 +90,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rooms/{room}/add-members', [RoomController::class , 'addMembers']);
     Route::post('/rooms/{room}/remove-member/{user}', [RoomController::class , 'removeMember']);
     Route::post('/rooms/{room}/leave', [RoomController::class , 'leave']);
+
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 });

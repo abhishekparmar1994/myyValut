@@ -86,7 +86,7 @@ subscriber.on('pmessage', (pattern, channel, message) => {
     }
 
     // Detect userId from channel like "...user.123" or "...private-user.123"
-    if (channel.includes('user.')) {
+    if (channel.toLowerCase().includes('user.')) {
         const parts = channel.split('.');
         if (parts.length >= 2) {
             const userId = parts[parts.length - 1];

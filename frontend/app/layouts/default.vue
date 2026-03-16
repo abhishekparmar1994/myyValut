@@ -31,6 +31,14 @@
                   </BBadge>
                 </BDropdownItem>
               </BNavItemDropdown>
+
+              <NuxtLink to="/notifications" class="nav-link me-3 position-relative">
+                <span class="fs-5">🔔</span>
+                <BBadge v-if="notificationStore.unreadCount > 0" variant="danger" pill class="position-absolute top-0 start-100 translate-middle-x" style="font-size: 0.6rem; padding: 0.3em 0.5em;">
+                  {{ notificationStore.unreadCount > 99 ? '99+' : notificationStore.unreadCount }}
+                </BBadge>
+              </NuxtLink>
+
               <BNavItemDropdown right>
                 <template #button-content>
                   <span class="me-2">
@@ -77,12 +85,15 @@
 <script setup>
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
+import { useNotificationStore } from '~/stores/notification'
 
 const auth = useAuthStore()
 const chat = useChatStore()
+const notificationStore = useNotificationStore()
 
 onMounted(() => {
   auth.initialize()
   chat.init()
+  notificationStore.fetchUnreadCount()
 })
 </script>

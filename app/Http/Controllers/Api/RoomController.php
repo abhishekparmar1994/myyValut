@@ -79,7 +79,18 @@ class RoomController extends Controller
             'description' => 'nullable|string',
         ]);
 
+        $oldName = $room->name;
         $room->update($request->only(['name', 'description']));
+
+        if ($request->has('name') && $request->name !== $oldName) {
+            $sysMsg = \App\Models\Message::create([
+                'room_id' => $room->id,
+                'sender_id' => $request->user()->id,
+                'content' => $request->user()->name . " changed the group name to \"" . $request->name . "\"",
+                'type' => 'system'
+            ]);
+            $this->broadcastSystemMessage($room, $sysMsg);
+        }
 
         return response()->json($room);
     }
@@ -111,6 +122,13 @@ class RoomController extends Controller
                         'type' => 'system'
                     ]);
                     $this->broadcastSystemMessage($room, $sysMsg);
+
+                    // Send persistent notification to the added user
+                    $addedUser->notify(new \App\Notifications\GeneralNotification([
+                        'message' => $request->user()->name . " added you to the group \"" . $room->name . "\"",
+                        'type' => 'room_added',
+                        'room_id' => $room->id
+                    ]));
                 }
             }
         }
@@ -198,6 +216,13 @@ class RoomController extends Controller
         ]);
 
         $this->broadcastSystemMessage($room, $sysMsg, [$user->id]);
+
+        // Send persistent notification to the removed user
+        $user->notify(new \App\Notifications\GeneralNotification([
+            'message' => $request->user()->name . " removed you from the group \"" . $room->name . "\"",
+            'type' => 'room_removed',
+            'room_id' => $room->id
+        ]));
 
         return response()->json(['message' => 'User removed successfully', 'room' => $room->load('members')]);
     }

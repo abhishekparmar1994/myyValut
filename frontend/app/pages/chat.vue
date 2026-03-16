@@ -157,11 +157,21 @@
                 v-for="(msg, i) in filteredMessages" 
                 :key="i"
                 :id="`msg-${msg.id}`"
-                class="message-wrapper d-flex mb-3 group"
-                :class="msg.senderId === auth.user?.id ? 'justify-content-end' : 'justify-content-start'"
+                class="message-wrapper d-flex mb-3 group align-items-end gap-2"
+                :class="msg.senderId === auth.user?.id ? 'flex-row-reverse' : 'flex-row'"
               >
+                <!-- Message Avatar -->
+                <BAvatar 
+                  size="2.5rem" 
+                  :src="msg.senderId === auth.user?.id ? getProfileImageUrl(auth.user) : getProfileImageUrl(activeUser)" 
+                  :text="msg.senderId === auth.user?.id ? auth.user?.name?.charAt(0) : activeUser.name?.charAt(0)"
+                  variant="light"
+                  class="flex-shrink-0 shadow-sm border border-white mb-1"
+                />
+
                 <div 
                   class="message px-3 py-2 shadow-sm max-w-75 position-relative group"
+                  :style="msg.senderId === auth.user?.id ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
                   :class="msg.senderId === auth.user?.id ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
                 >
                   <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
@@ -235,9 +245,16 @@
                 </div>
               </div>
 
-              <!-- Typing Animation -->
-              <div v-if="chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start mt-2">
-                <div class="message px-3 py-2 rounded-4 shadow-sm bg-white border text-dark d-flex align-items-center gap-2">
+               <!-- Typing Animation -->
+              <div v-if="chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start align-items-end gap-2 mt-2">
+                <BAvatar 
+                  size="2.5rem" 
+                  :src="getProfileImageUrl(activeUser)" 
+                  :text="activeUser.name?.charAt(0)"
+                  variant="light"
+                  class="flex-shrink-0 shadow-sm border border-white mb-1"
+                />
+                <div class="message px-3 py-2 shadow-sm bg-white border text-dark d-flex align-items-center gap-2" style="border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;">
                   <div class="typing-dots">
                      <span></span><span></span><span></span>
                   </div>

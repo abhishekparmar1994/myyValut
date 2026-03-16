@@ -92,9 +92,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rooms/{room}/leave', [RoomController::class , 'leave']);
 
     // Notifications
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
-    Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markAsRead']);
-    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+    Route::get('/notifications', [NotificationController::class , 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class , 'unreadCount']);
+    Route::post('/notifications/{id}/mark-read', [NotificationController::class , 'markAsRead']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class , 'markAllAsRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class , 'destroy']);
 });

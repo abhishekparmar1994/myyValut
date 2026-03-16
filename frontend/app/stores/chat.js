@@ -421,6 +421,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     return {
+        socket,
         messages,
         presence,
         typingUsers,

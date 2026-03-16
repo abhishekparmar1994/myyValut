@@ -184,6 +184,62 @@ io.on('connection', (socket) => {
         socket.to(`user.${payload.receiverId}`).emit('chat.read', { userId });
     });
 
+    // --- WebRTC Signaling Events ---
+    
+    // 1. Initial Call Request
+    socket.on('call:initiate', ({ receiverId, type }) => {
+        const rId = String(receiverId);
+        const room = `user.${rId}`;
+        const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+        console.log(`[CALL] initiate: from ${userId} to ${rId}. Room ${room} size: ${roomSize}`);
+
+        io.to(room).emit('call:incoming', { 
+            senderId: userId, 
+            type: type || 'video' 
+        });
+    });
+
+    // 2. SDP Offer
+    socket.on('call:offer', ({ receiverId, offer, type }) => {
+        const rId = String(receiverId);
+        console.log(`[CALL] offer: relay from ${userId} to ${rId}`);
+        io.to(`user.${rId}`).emit('call:offer', { senderId: userId, offer, type });
+    });
+
+    // 3. SDP Answer
+    socket.on('call:answer', ({ receiverId, answer }) => {
+        const rId = String(receiverId);
+        console.log(`[CALL] answer: relay from ${userId} to ${rId}`);
+        io.to(`user.${rId}`).emit('call:answer', { senderId: userId, answer });
+    });
+
+    // 4. Call Accepted
+    socket.on('call:accept', ({ receiverId }) => {
+        const rId = String(receiverId);
+        console.log(`[CALL] accept: from ${userId} for ${rId}`);
+        io.to(`user.${rId}`).emit('call:accepted', { senderId: userId });
+    });
+
+    // 5. ICE Candidates
+    socket.on('call:ice-candidate', ({ receiverId, candidate }) => {
+        const rId = String(receiverId);
+        io.to(`user.${rId}`).emit('call:ice-candidate', { senderId: userId, candidate });
+    });
+
+    // 6. Call Rejected
+    socket.on('call:reject', ({ receiverId }) => {
+        const rId = String(receiverId);
+        console.log(`[CALL] reject: from ${userId} for ${rId}`);
+        io.to(`user.${rId}`).emit('call:rejected', { senderId: userId });
+    });
+
+    // 7. Call Ended
+    socket.on('call:end', ({ receiverId }) => {
+        const rId = String(receiverId);
+        console.log(`[CALL] end: from ${userId} for ${rId}`);
+        io.to(`user.${rId}`).emit('call:ended', { senderId: userId });
+    });
+
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${userId}`);
         onlineUsers.delete(userId);

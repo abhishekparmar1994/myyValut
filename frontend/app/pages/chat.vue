@@ -96,6 +96,15 @@
               </div>
             </div>
             <div class="d-flex align-items-center gap-2">
+              <BButton variant="outline-warning" size="sm" class="rounded-pill px-2 py-0 small" style="font-size: 0.7rem;" @click="showIncomingCall = true; incomingCallerName = 'System Test'; incomingCallType = 'audio'">
+                DEBUG: Test Modal
+              </BButton>
+              <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')">
+                <span>📞</span>
+              </BButton>
+              <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('video')">
+                <span>📹</span>
+              </BButton>
               <BDropdown variant="light" size="sm" no-caret rounded="circle">
                 <template #button-content>
                   <span class="fs-5">⋮</span>
@@ -175,6 +184,10 @@
                   </div>
                   <template v-else>
                     <div v-if="msg.type === 'text'" class="message-text">{{ msg.content }}</div>
+                    <div v-else-if="msg.type === 'call'" class="message-call d-flex align-items-center gap-2 py-1">
+                      <span class="fs-5">{{ msg.content.includes('Video') ? '📹' : '📞' }}</span>
+                      <span class="fw-bold">{{ msg.content }}</span>
+                    </div>
                     <div v-else-if="msg.type === 'image'" class="message-image mb-1">
                       <img :src="msg.content" class="img-fluid rounded-2 cursor-pointer" @click="openPreview(msg.content, msg.fileName)" style="max-height: 300px; object-fit: cover;" />
                     </div>
@@ -332,12 +345,46 @@
       </BButton>
     </div>
   </BModal>
+
+  <!-- WebRTC Call Components -->
+  <ChatCallOverlay 
+    :is-open="isCallActive"
+    :user-name="activeCallUser?.name"
+    :local-stream="localStream"
+    :remote-stream="remoteStream"
+    :active-call-type="activeCallType"
+    :call-duration="callDuration"
+    status-text="In call..."
+    @hangup="endCall"
+    @mute="toggleMute"
+    @camera="toggleVideo"
+  />
+
+  <BModal v-model="showIncomingCall" title="Incoming Call" centered hide-footer no-close-on-backdrop>
+    <div class="text-center p-4">
+      <BAvatar size="5rem" variant="info" :text="incomingCallerName?.charAt(0) || 'U'" class="mb-4 shadow" />
+      <h4 class="fw-bold mb-2">{{ incomingCallerName }}</h4>
+      <p class="text-muted mb-4">Incoming {{ incomingCallType === 'video' ? 'Video' : 'Voice' }} Call...</p>
+      
+      <div class="d-flex justify-content-center gap-3">
+        <BButton variant="danger" class="rounded-pill px-4 py-2" @click="rejectCall">
+          Hang Up
+        </BButton>
+        <BButton variant="success" class="rounded-pill px-4 py-2" @click="acceptCall">
+          Accept
+        </BButton>
+      </div>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
+import { useWebRTC } from '~/composables/useWebRTC'
+
+// Import document viewers
 
 // Import document viewers
 import VueOfficePdf from '@vue-office/pdf'
@@ -369,6 +416,132 @@ const activeUser = ref(null)
 const messageContainer = ref(null)
 const showEmojiPicker = ref(false)
 const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocked: false })
+
+// --- WebRTC Call Logic ---
+const { 
+  localStream, 
+  remoteStream, 
+  isCalling: isCallActive, 
+  activeCallType, 
+  remoteUserId,
+  callDuration,
+  startTime,
+  startCall, 
+  handleOffer, 
+  handleAnswer, 
+  handleIceCandidate, 
+  endCall: endWebRTCCall,
+  resetTimer,
+  toggleMute,
+  toggleVideo
+} = useWebRTC()
+
+const showIncomingCall = ref(false)
+const incomingCallerId = ref(null)
+const incomingCallerName = ref('')
+const incomingCallType = ref('video')
+const activeCallUser = ref(null)
+
+const initiateCall = async (type) => {
+    if (!activeUser.value) return
+    activeCallUser.value = activeUser.value
+    console.log(`[CALL] initiateCall: Current User (Me): ${auth.user?.id}, Calling User: ${activeUser.value.id}, Type: ${type}`)
+    // Notify receiver first (Signaling only)
+    console.log(`[CALL] Emitting call:initiate to ${activeUser.value.id} (${type})`)
+    chat.socket?.emit('call:initiate', { receiverId: activeUser.value.id, type })
+    
+    isCallActive.value = true 
+    activeCallType.value = type
+}
+
+const acceptCall = async () => {
+    console.log(`[CALL] acceptCall: Accepting call from ${incomingCallerId.value}`)
+    showIncomingCall.value = false
+    const caller = chat.users.find(u => String(u.id) === String(incomingCallerId.value))
+    activeCallUser.value = caller
+    
+    // Notify caller that we accepted
+    chat.socket?.emit('call:accept', { receiverId: incomingCallerId.value })
+    
+    // Now we Wait for their 'call:offer'
+}
+
+const rejectCall = () => {
+    console.log(`[CALL] rejectCall: Rejecting call from ${incomingCallerId.value}`)
+    showIncomingCall.value = false
+    chat.socket?.emit('call:reject', { receiverId: incomingCallerId.value })
+    incomingCallerId.value = null
+}
+
+const endCall = async () => {
+    console.log('[CALL] endCall: Terminating active call session')
+    const duration = callDuration.value
+    const type = activeCallType.value
+    const partnerId = activeCallUser.value?.id
+
+    endWebRTCCall()
+    showIncomingCall.value = false // Ensure incoming modal also closes
+
+    if (partnerId) {
+        // Log the call in history
+        const content = `${type.charAt(0).toUpperCase() + type.slice(1)} Call (${duration})`
+        try {
+            await chat.sendMessage(partnerId, content, 'call')
+        } catch (err) {
+            console.error('Failed to log call history', err)
+        }
+    }
+    
+    activeCallUser.value = null
+    resetTimer()
+}
+
+// Setup Socket Listeners for Calls
+watch(() => chat.socket, (socket) => {
+    if (!socket) return
+
+    socket.on('call:incoming', ({ senderId, type }) => {
+        console.log(`[CALL] Received call:incoming from ${senderId} (${type})`)
+        // Fallback alert to be absolutely sure we know if it arrived
+        // window.alert(`DEBUG: Incoming call from ${senderId}`)
+        
+        const caller = chat.users.find(u => String(u.id) === String(senderId))
+        incomingCallerId.value = senderId
+        incomingCallerName.value = caller?.name || 'Unknown User'
+        incomingCallType.value = type
+        showIncomingCall.value = true
+        
+        console.log('[CALL] showIncomingCall set to true')
+    })
+
+    socket.on('call:accepted', async ({ senderId }) => {
+        console.log('[CALL] Receiver accepted call, starting WebRTC...')
+        await startCall(senderId, activeCallType.value)
+    })
+
+    socket.on('call:offer', async ({ senderId, offer, type }) => {
+        // Since we already accepted, we can handle the offer
+        await handleOffer(senderId, offer, type)
+    })
+
+    socket.on('call:answer', async ({ answer }) => {
+        await handleAnswer(answer)
+    })
+
+    socket.on('call:ice-candidate', async ({ candidate }) => {
+        await handleIceCandidate(candidate)
+    })
+
+    socket.on('call:rejected', () => {
+        alert('Call was rejected')
+        endCall()
+    })
+
+    socket.on('call:ended', () => {
+        endCall()
+    })
+}, { immediate: true })
+// --- End WebRTC Call Logic ---
 
 // State for Message Deletion
 const showDeleteModal = ref(false)

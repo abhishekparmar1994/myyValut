@@ -16,49 +16,49 @@ use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\UserBlocksController;
 use App\Http\Controllers\Api\RoomController;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class , 'register']);
+Route::post('/login', [AuthController::class , 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', fn(Request $request) => $request->user());
-    Route::get('/users', [AuthController::class, 'users']);
-    Route::get('/messages/{receiverId}', [MessagesController::class, 'index']);
-    Route::post('/messages', [MessagesController::class, 'store']);
-    Route::post('/messages/upload', [MessagesController::class, 'upload']);
-    Route::get('/messages/unread-counts', [MessagesController::class, 'unreadCounts']);
-    Route::post('/messages/read/{senderId}', [MessagesController::class, 'markAsRead']);
-    Route::post('/messages/react/{messageId}', [MessagesController::class, 'toggleReaction']);
-    Route::post('/messages/pin/{messageId}', [MessagesController::class, 'togglePin']);
-    Route::put('/messages/{messageId}', [MessagesController::class, 'editMessage']);
-    Route::delete('/messages/{messageId}', [MessagesController::class, 'deleteMessage']);
-    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/users', [AuthController::class , 'users']);
+    Route::get('/messages/{receiverId}', [MessagesController::class , 'index']);
+    Route::post('/messages', [MessagesController::class , 'store']);
+    Route::post('/messages/upload', [MessagesController::class , 'upload']);
+    Route::get('/messages/unread-counts', [MessagesController::class , 'unreadCounts']);
+    Route::post('/messages/read/{senderId}', [MessagesController::class , 'markAsRead']);
+    Route::post('/messages/react/{messageId}', [MessagesController::class , 'toggleReaction']);
+    Route::post('/messages/pin/{messageId}', [MessagesController::class , 'togglePin']);
+    Route::put('/messages/{messageId}', [MessagesController::class , 'editMessage']);
+    Route::delete('/messages/{messageId}', [MessagesController::class , 'deleteMessage']);
+    Route::post('/logout', [AuthController::class , 'logout']);
 
     // Profile
-    Route::get('/profile', [ProfileController::class, 'show']);
-    Route::put('/profile', [ProfileController::class, 'update']);
-    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
-    Route::post('/profile/image', [ProfileController::class, 'updateImage']);
-    Route::get('/profile/image', [ProfileController::class, 'image']);
+    Route::get('/profile', [ProfileController::class , 'show']);
+    Route::put('/profile', [ProfileController::class , 'update']);
+    Route::put('/profile/password', [ProfileController::class , 'updatePassword']);
+    Route::post('/profile/image', [ProfileController::class , 'updateImage']);
+    Route::get('/profile/image', [ProfileController::class , 'image']);
 
     // Activities
-    Route::get('/activities', [ActivityController::class, 'index']);
+    Route::get('/activities', [ActivityController::class , 'index']);
 
     // Reminders
-    Route::get('/reminders/upcoming', [ReminderController::class, 'upcoming']);
+    Route::get('/reminders/upcoming', [ReminderController::class , 'upcoming']);
     Route::apiResource('reminders', ReminderController::class);
 
     // Documents
-    Route::get('/documents', [DocumentController::class, 'index']);
-    Route::post('/documents', [DocumentController::class, 'store']);
-    Route::get('/documents/{document}/download', [DocumentController::class, 'download']);
-    Route::delete('/documents/{document}', [DocumentController::class, 'destroy']);
+    Route::get('/documents', [DocumentController::class , 'index']);
+    Route::post('/documents', [DocumentController::class , 'store']);
+    Route::get('/documents/{document}/download', [DocumentController::class , 'download']);
+    Route::delete('/documents/{document}', [DocumentController::class , 'destroy']);
 
     // Medicines
-    Route::get('/medicines/today', [MedicineController::class, 'today']);
+    Route::get('/medicines/today', [MedicineController::class , 'today']);
     Route::apiResource('medicines', MedicineController::class);
 
     // Bills
-    Route::post('/bills/{bill}/mark-paid', [BillController::class, 'markPaid']);
+    Route::post('/bills/{bill}/mark-paid', [BillController::class , 'markPaid']);
     Route::apiResource('bills', BillController::class);
 
     // Notes  
@@ -68,24 +68,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('vehicles', VehicleController::class)->except(['show']);
 
     // Budget / Transactions
-    Route::get('/transactions/summary', [TransactionController::class, 'summary']);
-    Route::get('/transactions', [TransactionController::class, 'index']);
-    Route::post('/transactions', [TransactionController::class, 'store']);
-    Route::delete('/transactions/{transaction}', [TransactionController::class, 'destroy']);
+    Route::get('/transactions/summary', [TransactionController::class , 'summary']);
+    Route::get('/transactions', [TransactionController::class , 'index']);
+    Route::post('/transactions', [TransactionController::class , 'store']);
+    Route::delete('/transactions/{transaction}', [TransactionController::class , 'destroy']);
 
     // File Preview with CORS
-    Route::get('/messages/file/{path}', [MessagesController::class, 'getFile'])->where('path', '.*');
+    Route::get('/messages/file/{path}', [MessagesController::class , 'getFile'])->where('path', '.*');
 
     // Block Management
-    Route::get('/blocks', [UserBlocksController::class, 'index']);
-    Route::post('/blocks/toggle', [UserBlocksController::class, 'toggle']);
-    Route::get('/blocks/check/{userId}', [UserBlocksController::class, 'check']);
+    Route::get('/blocks', [UserBlocksController::class , 'index']);
+    Route::post('/blocks/toggle', [UserBlocksController::class , 'toggle']);
+    Route::get('/blocks/check/{userId}', [UserBlocksController::class , 'check']);
 
     // Groups / Rooms
-    Route::get('/rooms', [RoomController::class, 'index']);
-    Route::post('/rooms', [RoomController::class, 'store']);
-    Route::get('/rooms/{room}', [RoomController::class, 'show']);
-    Route::put('/rooms/{room}', [RoomController::class, 'update']);
-    Route::post('/rooms/{room}/add-members', [RoomController::class, 'addMembers']);
-    Route::post('/rooms/{room}/leave', [RoomController::class, 'leave']);
+    Route::get('/rooms', [RoomController::class , 'index']);
+    Route::post('/rooms', [RoomController::class , 'store']);
+    Route::get('/rooms/{room}', [RoomController::class , 'show']);
+    Route::put('/rooms/{room}', [RoomController::class , 'update']);
+    Route::post('/rooms/{room}/add-members', [RoomController::class , 'addMembers']);
+    Route::post('/rooms/{room}/leave', [RoomController::class , 'leave']);
 });

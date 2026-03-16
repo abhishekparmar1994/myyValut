@@ -39,7 +39,7 @@
               :key="user.id" 
               class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all"
               :class="{ 'bg-primary-subtle border-primary': activeUser?.id === user.id }"
-              @click="activeUser = user"
+              @click="selectUser(user)"
             >
               <div class="position-relative">
                 <BAvatar 
@@ -74,7 +74,7 @@
               :key="user.id" 
               class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all opacity-75"
               :class="{ 'bg-primary-subtle border-primary': activeUser?.id === user.id }"
-              @click="activeUser = user"
+              @click="selectUser(user)"
             >
               <BAvatar 
                 v-if="user.profile_image"
@@ -205,7 +205,6 @@
                   </div>
                 </div>
               </div>
-
             </div>
             <BButton variant="link" size="sm" class="text-decoration-none text-muted p-0 px-2" @click="scrollToMessage(chat.pinnedMessage.id)">
                View
@@ -226,23 +225,23 @@
                 :key="i"
                 :id="`msg-${msg.id}`"
                 class="message-wrapper d-flex mb-3 group align-items-end gap-2"
-                :class="msg.senderId === auth.user?.id ? 'flex-row-reverse' : 'flex-row'"
+                :class="String(msg.senderId) === String(auth.user?.id) ? 'flex-row-reverse' : 'flex-row'"
               >
                 <!-- Message Avatar -->
                 <BAvatar 
                   size="2.5rem" 
-                  :src="msg.senderId === auth.user?.id ? getProfileImageUrl(auth.user) : (msg.roomId ? getProfileImageUrl(msg.sender) : getProfileImageUrl(activeUser))" 
-                  :text="msg.senderId === auth.user?.id ? auth.user?.name?.charAt(0) : (msg.roomId ? msg.sender?.name?.charAt(0) : activeUser?.name?.charAt(0))"
+                  :src="String(msg.senderId) === String(auth.user?.id) ? getProfileImageUrl(auth.user) : (msg.roomId ? getProfileImageUrl(msg.sender) : (activeUser ? getProfileImageUrl(activeUser) : null))" 
+                  :text="String(msg.senderId) === String(auth.user?.id) ? auth.user?.name?.charAt(0) : (msg.roomId ? msg.sender?.name?.charAt(0) : (activeUser ? activeUser.name?.charAt(0) : 'U'))"
                   variant="light"
                   class="flex-shrink-0 shadow-sm border border-white mb-1"
                 />
 
                 <div 
                   class="message px-3 py-2 shadow-sm max-w-75 position-relative group"
-                  :style="msg.senderId === auth.user?.id ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
-                  :class="msg.senderId === auth.user?.id ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
+                  :style="String(msg.senderId) === String(auth.user?.id) ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
+                  :class="String(msg.senderId) === String(auth.user?.id) ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
                 >
-                  <div v-if="msg.roomId && msg.senderId !== auth.user?.id" class="small fw-bold mb-1 text-primary">
+                  <div v-if="msg.roomId && String(msg.senderId) !== String(auth.user?.id)" class="small fw-bold mb-1 text-primary">
                     {{ msg.sender?.name }}
                   </div>
                   <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
@@ -261,7 +260,7 @@
 
                   <!-- Reply Preview inside message -->
                   <div v-if="msg.reply_to" class="mb-2 p-2 rounded-3 bg-black bg-opacity-10 border-start border-3" :class="msg.senderId === auth.user?.id ? 'border-light-subtle' : 'border-primary'" style="cursor: pointer" @click="scrollToMessage(msg.reply_to_id)">
-                    <small class="fw-bold d-block">{{ msg.reply_to.sender_id === auth.user?.id ? 'You' : (activeUser.name || 'User') }}</small>
+                    <small class="fw-bold d-block">{{ msg.reply_to.sender_id === auth.user?.id ? 'You' : (msg.reply_to.sender?.name || (activeUser ? activeUser.name : 'User')) }}</small>
                     <small class="text-truncate d-block opacity-75">{{ msg.reply_to.content }}</small>
                   </div>
                   <!-- Message Content -->
@@ -316,8 +315,8 @@
                 </div>
               </div>
 
-               <!-- Typing Animation -->
-              <div v-if="chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start align-items-end gap-2 mt-2">
+               <!-- Typing Animation (only in 1-to-1 chat when activeUser exists) -->
+              <div v-if="activeUser && chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start align-items-end gap-2 mt-2">
                 <BAvatar 
                   size="2.5rem" 
                   :src="getProfileImageUrl(activeUser)" 
@@ -346,7 +345,7 @@
               <!-- Reply Preview -->
               <div v-if="chat.replyTo" class="mx-0 mb-2 p-2 rounded-3 bg-light border-start border-primary border-4 d-flex justify-content-between align-items-center">
                 <div class="overflow-hidden">
-                  <small class="fw-bold text-primary d-block">Replying to {{ chat.replyTo.senderId === auth.user?.id ? 'yourself' : activeUser.name }}</small>
+                  <small class="fw-bold text-primary d-block">Replying to {{ chat.replyTo.senderId === auth.user?.id ? 'yourself' : (chat.replyTo.sender?.name || (activeUser ? activeUser.name : 'Unknown')) }}</small>
                   <small class="text-muted text-truncate d-block">{{ chat.replyTo.content }}</small>
                 </div>
                 <BButton variant="link" size="sm" class="text-decoration-none text-danger p-0 px-2" @click="chat.replyTo = null">✕</BButton>
@@ -790,7 +789,7 @@ const {
     joinSharing,
     handleJoinAttempt,
     handleSignal: handleScreenSignal,
-    endScreenShare: endScreenShareCore
+    endScreenShare
 } = useScreenShare()
 
 const showScreenShareInvite = ref(false)
@@ -799,6 +798,52 @@ const enteredPasscode = ref('')
 const enteredUsername = ref('')
 const incomingScreenSender = ref(null)
 const remoteScreenVideo = ref(null)
+
+async function selectUser(user) {
+    chat.activeUserId = user.id
+    chat.activeRoomId = null
+    sidebarMode.value = 'users'
+    await chat.fetchHistory(user.id)
+    scrollToBottom()
+}
+
+async function selectRoom(room) {
+    chat.activeRoomId = room.id
+    chat.activeUserId = null
+    sidebarMode.value = 'groups'
+    await chat.fetchHistory(room.id, true)
+    scrollToBottom()
+}
+
+async function createGroup() {
+    if (!newGroupName.value.trim() || selectedMembersForNewGroup.value.length === 0) return
+    
+    try {
+        const config = useRuntimeConfig()
+        const data = await $fetch(`${config.public.apiBase}/rooms`, {
+            method: 'POST',
+            body: {
+                name: newGroupName.value,
+                member_ids: selectedMembersForNewGroup.value,
+                description: ''
+            },
+            headers: authHeaders()
+        })
+        
+        await chat.fetchRooms()
+        showNewGroupModal.value = false
+        newGroupName.value = ''
+        selectedMembersForNewGroup.value = []
+        
+        // Select the new room
+        const newRoom = chat.rooms.find(r => r.id === data.id)
+        if (newRoom) selectRoom(newRoom)
+        
+    } catch (err) {
+        console.error('Failed to create group', err)
+        alert('Failed to create group: ' + (err.response?._data?.message || err.message))
+    }
+}
 
 const startScreenSharing = async () => {
     if (!activeUser.value) return
@@ -1117,7 +1162,15 @@ async function onFileSelected(event) {
         })
         
         // Send as appropriate message type
-        await chat.sendMessage(activeUser.value.id, data.url, data.type, data.name)
+        const targetId = chat.activeRoomId || activeUser.value.id
+        await chat.sendMessage(
+            chat.activeRoomId ? null : activeUser.value.id, 
+            data.url, 
+            data.type, 
+            data.name, 
+            null, 
+            chat.activeRoomId
+        )
         scrollToBottom()
     } catch (err) {
         console.error('Upload failed', err)
@@ -1231,7 +1284,7 @@ async function handleSend() {
     try {
         const replyToId = chat.replyTo?.id
         await chat.sendMessage(
-            chat.activeUserId, 
+            chat.activeRoomId ? null : chat.activeUserId, 
             newMessage.value, 
             'text', 
             null, 

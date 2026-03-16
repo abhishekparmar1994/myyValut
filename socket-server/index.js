@@ -139,76 +139,134 @@ io.on('connection', (socket) => {
     // Broadcast to others that this user is online
     io.emit('presence.update', { userId, status: 'online' });
 
-    // Handle incoming chat messages (Client to Client via Server)
-    socket.on('chat.send', async ({ receiverId, roomId, content, type, fileName, replyToId }, callback) => {
-        if ((!receiverId && !roomId) || !content) {
-            return callback({ status: 'error', message: 'Invalid payload' });
+    // --- Private Messaging ---
+    socket.on('chat.private.send', async ({ receiverId, content, type, fileName, replyToId }, callback) => {
+        const parsedReceiverId = parseInt(receiverId);
+        if (!parsedReceiverId || !content) {
+            return callback({ status: 'error', message: 'Invalid private message payload' });
         }
 
-        const timestamp = new Date().toISOString()
-        
         try {
             let token = socket.handshake.auth.token || socket.handshake.headers['authorization'];
-            if (token && !token.startsWith('Bearer ')) {
-                token = `Bearer ${token}`;
-            }
+            if (token && !token.startsWith('Bearer ')) token = `Bearer ${token}`;
 
-            console.log(`[API] Saving message with replyToId: ${replyToId}`);
-
-            // Persist via Laravel API
             const response = await axios.post(`${API_URL}/messages`, {
-                receiver_id: receiverId,
-                room_id: roomId,
+                receiver_id: parsedReceiverId,
                 content,
                 type: type || 'text',
                 file_name: fileName,
-                reply_to_id: replyToId
+                reply_to_id: replyToId || null
             }, {
-                headers: { 
-                    'Authorization': token,
-                    'Accept': 'application/json'
-                }
-            })
+                headers: { 'Authorization': token, 'Accept': 'application/json' }
+            });
 
             const savedMessage = response.data;
-            console.log(`[API] Message saved with ID: ${savedMessage.id}`);
-
-            const channel = roomId ? `room.${roomId}` : `user.${receiverId}`;
+            const channel = `user.${parsedReceiverId}`;
             
-            // Relay to receiver/room with FULL context
             io.to(channel).emit('message.received', {
+                ...savedMessage,
                 id: savedMessage.id,
                 senderId: userId,
-                receiverId: receiverId,
-                roomId: roomId,
+                receiverId: parsedReceiverId,
+                roomId: null,
                 content: savedMessage.content,
-                type: savedMessage.type,
-                fileName: savedMessage.file_name,
                 timestamp: savedMessage.created_at,
-                reply_to: savedMessage.reply_to,
-                reply_to_id: savedMessage.reply_to_id,
-                sender: savedMessage.sender,
                 is_read: false,
                 reactions: []
-            })
+            });
 
-            if (callback) callback({ status: 'ok', timestamp: savedMessage.created_at, id: savedMessage.id })
+            if (callback) callback({ status: 'ok', timestamp: savedMessage.created_at, id: savedMessage.id });
         } catch (err) {
-            console.error('Failed to persist message. Error details:', err.response ? JSON.stringify(err.response.data) : err.message);
-            if (callback) callback({ status: 'error', message: 'Failed to save message' })
+            const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+            console.error('[PRIVATE] Failed to persist:', errorMsg);
+            if (callback) callback({ status: 'error', message: `Failed to save private message: ${errorMsg}` });
         }
-    })
-
-    // Typing Indicators
-    socket.on('chat.typing', ({ receiverId, roomId }) => {
-        const channel = roomId ? `room.${roomId}` : `user.${receiverId}`;
-        socket.to(channel).emit('chat.typing', { userId, roomId });
     });
 
-    // Read Receipts
-    socket.on('chat.read', ({ receiverId, roomId }) => {
-        const channel = roomId ? `room.${roomId}` : `user.${receiverId}`;
-        socket.to(channel).emit('chat.read', { userId, roomId });
+    // --- Group Messaging ---
+    socket.on('chat.group.send', async ({ roomId, content, type, fileName, replyToId }, callback) => {
+        const parsedRoomId = parseInt(roomId);
+        if (!parsedRoomId || !content) {
+            return callback({ status: 'error', message: 'Invalid group message payload' });
+        }
+
+        try {
+            let token = socket.handshake.auth.token || socket.handshake.headers['authorization'];
+            if (token && !token.startsWith('Bearer ')) token = `Bearer ${token}`;
+
+            const response = await axios.post(`${API_URL}/messages`, {
+                room_id: parsedRoomId,
+                content,
+                type: type || 'text',
+                file_name: fileName,
+                reply_to_id: replyToId || null
+            }, {
+                headers: { 'Authorization': token, 'Accept': 'application/json' }
+            });
+
+            const savedMessage = response.data;
+            const channel = `room.${parsedRoomId}`;
+            
+            io.to(channel).emit('message.received', {
+                ...savedMessage,
+                id: savedMessage.id,
+                senderId: userId,
+                receiverId: null,
+                roomId: parsedRoomId,
+                content: savedMessage.content,
+                timestamp: savedMessage.created_at,
+                is_read: false,
+                reactions: []
+            });
+
+            if (callback) callback({ status: 'ok', timestamp: savedMessage.created_at, id: savedMessage.id });
+        } catch (err) {
+            const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+            console.error('[GROUP] Failed to persist:', errorMsg);
+            if (callback) callback({ status: 'error', message: `Failed to save group message: ${errorMsg}` });
+        }
+    });
+
+    // Legacy support (to avoid breaking the app immediately)
+    socket.on('chat.send', async (data, callback) => {
+        if (data.roomId) {
+            socket.emit('chat.group.send', data, callback);
+        } else {
+            socket.emit('chat.private.send', data, callback);
+        }
+    });
+
+    // --- Typing Indicators ---
+    socket.on('chat.private.typing', ({ receiverId }) => {
+        if (!receiverId) return;
+        socket.to(`user.${parseInt(receiverId)}`).emit('chat.typing', { userId, receiverId: parseInt(receiverId) });
+    });
+
+    socket.on('chat.group.typing', ({ roomId }) => {
+        if (!roomId) return;
+        socket.to(`room.${parseInt(roomId)}`).emit('chat.typing', { userId, roomId: parseInt(roomId) });
+    });
+
+    // --- Read Receipts ---
+    socket.on('chat.private.read', ({ receiverId }) => {
+        if (!receiverId) return;
+        socket.to(`user.${parseInt(receiverId)}`).emit('chat.read', { userId, receiverId: parseInt(receiverId) });
+    });
+
+    socket.on('chat.group.read', ({ roomId }) => {
+        if (!roomId) return;
+        socket.to(`room.${parseInt(roomId)}`).emit('chat.read', { userId, roomId: parseInt(roomId) });
+    });
+
+    // Legacy Typing/Read support
+    socket.on('chat.typing', (data) => {
+        if (data.roomId) socket.emit('chat.group.typing', data);
+        else socket.emit('chat.private.typing', data);
+    });
+
+    socket.on('chat.read', (data) => {
+        if (data.roomId) socket.emit('chat.group.read', data);
+        else socket.emit('chat.private.read', data);
     });
 
     // --- WebRTC Signaling Events ---

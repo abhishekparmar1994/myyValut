@@ -58,8 +58,8 @@ class MessagesController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'receiver_id' => 'required_without:room_id|exists:users,id',
-            'room_id' => 'required_without:receiver_id|exists:rooms,id',
+            'receiver_id' => 'required_without:room_id|nullable|exists:users,id',
+            'room_id' => 'required_without:receiver_id|nullable|exists:rooms,id',
             'content' => 'required|string',
             'type' => 'nullable|string',
             'file_name' => 'nullable|string',

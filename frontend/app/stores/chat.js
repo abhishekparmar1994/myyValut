@@ -101,14 +101,22 @@ export const useChatStore = defineStore('chat', () => {
                 : activeUserId.value && String(message.senderId) === String(activeUserId.value)
 
             if (isMatch) {
-                messages.value = [...messages.value, message]
+                // Check if we already have this message (deduplication)
+                const exists = messages.value.some(m => String(m.id) === String(message.id))
+                if (!exists) {
+                    messages.value = [...messages.value, {
+                        ...message,
+                        isMe: String(message.senderId) === String(auth.user?.id)
+                    }]
+                }
             }
             
-            // Update last message in users list
-            updateUserLastMessage(message.senderId, message)
+            // Update last message in users/rooms list
+            updateLastMessage(message.roomId || message.senderId, message, !!message.roomId)
 
             // Show background notification (regardless of active chat)
-            if (import.meta.client && document.visibilityState === 'hidden') {
+            const isMe = String(message.senderId) === String(auth.user?.id)
+            if (import.meta.client && document.visibilityState === 'hidden' && !isMe) {
                 const sender = users.value.find(u => String(u.id) === String(message.senderId))
                 const senderName = sender ? sender.name : `User ${message.senderId}`
                 
@@ -160,13 +168,21 @@ export const useChatStore = defineStore('chat', () => {
         // Bridges from Laravel (Redis -> Socket -> Client)
         socket.value.on('message.sent', (payload) => {
             const message = payload.message
-            messages.value = [...messages.value, {
-                ...message,
-                fromLaravel: true
-            }]
+            const exists = messages.value.some(m => String(m.id) === String(message.id))
+            if (!exists) {
+                messages.value = [...messages.value, {
+                    ...message,
+                    senderId: message.sender_id, // Map for consistency
+                    receiverId: message.receiver_id,
+                    roomId: message.room_id,
+                    isMe: String(message.sender_id) === String(auth.user?.id),
+                    fromLaravel: true
+                }]
+            }
 
-            // Update last message in users list
-            updateUserLastMessage(message.receiver_id, message)
+            // Update last message in users/rooms list
+            const targetIdForUpdate = message.room_id || message.receiver_id
+            updateLastMessage(targetIdForUpdate, message, !!message.room_id)
 
             // Increment unread count if it's not from me AND we're not currently looking at this chat
             const isFromOther = payload.message.sender_id != auth.user?.id
@@ -260,30 +276,39 @@ export const useChatStore = defineStore('chat', () => {
             return Promise.reject(new Error('Socket not connected'))
         }
 
-        console.log(`Emitting chat.send to ${roomId ? 'room ' + roomId : receiverId}...`, { content, type, fileName, replyToId })
+        const isGroup = !!roomId
+        const eventName = isGroup ? 'chat.group.send' : 'chat.private.send'
+        const payload = isGroup 
+            ? { roomId, content, type, fileName, replyToId } 
+            : { receiverId, content, type, fileName, replyToId }
+
+        console.log(`Emitting ${eventName} to ${isGroup ? 'room ' + roomId : 'user ' + receiverId}...`, payload)
 
         return new Promise((resolve, reject) => {
-            socket.value.emit('chat.send', { receiverId, roomId, content, type, fileName, replyToId }, (response) => {
-                console.log('Received acknowledgment for chat.send:', response)
+            socket.value.emit(eventName, payload, (response) => {
+                console.log(`Received acknowledgment for ${eventName}:`, response)
                 if (response.status === 'ok') {
-                    // We'll let the event echo or just push local
-                    const newMsg = {
-                        id: response.id,
-                        senderId: auth.user.id,
-                        receiverId,
-                        roomId,
-                        content,
-                        type,
-                        fileName,
-                        reply_to_id: replyToId,
-                        reply_to: replyTo.value, // Local preview
-                        timestamp: response.timestamp,
-                        isMe: true,
-                        reactions: []
+                    // Only push if not already received via socket echo
+                    const exists = messages.value.some(m => String(m.id) === String(response.id))
+                    if (!exists) {
+                        const newMsg = {
+                            id: response.id,
+                            senderId: auth.user.id,
+                            receiverId: isGroup ? null : receiverId,
+                            roomId: isGroup ? roomId : null,
+                            content,
+                            type,
+                            fileName,
+                            reply_to_id: replyToId,
+                            reply_to: replyTo.value,
+                            timestamp: response.timestamp,
+                            isMe: true,
+                            reactions: []
+                        }
+                        messages.value = [...messages.value, newMsg]
                     }
-                    messages.value = [...messages.value, newMsg]
-                    updateUserLastMessage(receiverId, newMsg)
-                    replyTo.value = null // Clear after send
+                    updateLastMessage(roomId || receiverId, { content, type, timestamp: response.timestamp }, isGroup)
+                    replyTo.value = null
                     resolve(response)
                 } else {
                     reject(response)
@@ -294,7 +319,8 @@ export const useChatStore = defineStore('chat', () => {
 
     function sendTyping(receiverId, roomId = null) {
         if (!socket.value) return
-        socket.value.emit('chat.typing', { receiverId, roomId })
+        const eventName = roomId ? 'chat.group.typing' : 'chat.private.typing'
+        socket.value.emit(eventName, { receiverId, roomId })
     }
 
     async function fetchHistory(id, isRoom = false) {
@@ -324,6 +350,7 @@ export const useChatStore = defineStore('chat', () => {
                 id: m.id,
                 senderId: m.sender_id,
                 receiverId: m.receiver_id,
+                roomId: m.room_id,
                 content: m.content,
                 type: m.type,
                 fileName: m.file_name,
@@ -425,7 +452,8 @@ export const useChatStore = defineStore('chat', () => {
 
     function sendRead(receiverId, roomId = null) {
         if (!socket.value) return
-        socket.value.emit('chat.read', { receiverId, roomId })
+        const eventName = roomId ? 'chat.group.read' : 'chat.private.read'
+        socket.value.emit(eventName, { receiverId, roomId })
 
         // Reset local unread count
         const key = roomId ? `room_${roomId}` : `user_${receiverId}`
@@ -500,12 +528,21 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function updateUserLastMessage(userId, message) {
-        const user = users.value.find(u => String(u.id) === String(userId))
-        if (user) {
-            user.last_message = message.content
-            user.last_message_type = message.type
-            user.last_message_time = message.timestamp || message.created_at
+    function updateLastMessage(id, message, isRoom = false) {
+        if (isRoom) {
+            const room = rooms.value.find(r => String(r.id) === String(id))
+            if (room) {
+                room.last_message = message.content
+                room.last_message_type = message.type
+                room.last_message_time = message.timestamp || message.created_at
+            }
+        } else {
+            const user = users.value.find(u => String(u.id) === String(id))
+            if (user) {
+                user.last_message = message.content
+                user.last_message_type = message.type
+                user.last_message_time = message.timestamp || message.created_at
+            }
         }
     }
 
@@ -529,6 +566,7 @@ export const useChatStore = defineStore('chat', () => {
         activeRoomId,
         init,
         fetchUsers,
+        fetchRooms,
         fetchBlockedUsers,
         fetchUnreadCounts,
         sendMessage,
@@ -541,6 +579,8 @@ export const useChatStore = defineStore('chat', () => {
         deleteMessage,
         editMessage,
         isUserBlocked,
+        updateLastMessage,
         disconnect
     }
-})
+}
+)

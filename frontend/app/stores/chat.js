@@ -25,6 +25,18 @@ export const useChatStore = defineStore('chat', () => {
         return Object.values(unreadCounts.value).reduce((sum, count) => sum + (count || 0), 0)
     })
 
+    const totalChatsUnread = computed(() => {
+        return Object.entries(unreadCounts.value)
+            .filter(([key]) => key.startsWith('user_'))
+            .reduce((sum, [_, count]) => sum + (count || 0), 0)
+    })
+
+    const totalGroupsUnread = computed(() => {
+        return Object.entries(unreadCounts.value)
+            .filter(([key]) => key.startsWith('room_'))
+            .reduce((sum, [_, count]) => sum + (count || 0), 0)
+    })
+
     function init() {
         if (socket.value) return
         
@@ -113,6 +125,17 @@ export const useChatStore = defineStore('chat', () => {
             
             // Update last message in users/rooms list
             updateLastMessage(message.roomId || message.senderId, message, !!message.roomId)
+
+            // Increment unread count if it's not from me AND we're not currently looking at this chat
+            const isFromOther = String(message.senderId) !== String(auth.user?.id)
+            if (isFromOther) {
+                if (!isMatch) {
+                    const key = message.roomId ? `room_${message.roomId}` : `user_${message.senderId}`
+                    unreadCounts.value[key] = (unreadCounts.value[key] || 0) + 1
+                } else {
+                    sendRead(message.senderId, message.roomId)
+                }
+            }
 
             // Show background notification (regardless of active chat)
             const isMe = String(message.senderId) === String(auth.user?.id)
@@ -562,6 +585,8 @@ export const useChatStore = defineStore('chat', () => {
         notificationPermission,
         unreadCounts,
         totalUnreadCount,
+        totalChatsUnread,
+        totalGroupsUnread,
         rooms,
         activeRoomId,
         init,

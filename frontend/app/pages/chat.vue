@@ -15,15 +15,21 @@
               :class="sidebarMode === 'users' ? 'bg-primary text-white shadow-sm' : 'text-muted'"
               @click="sidebarMode = 'users'"
             >
-              Chats
-            </button>
+                Chats
+                <BBadge v-if="chat.totalChatsUnread > 0" variant="danger" pill class="ms-1 shadow-sm" style="font-size: 0.7rem;">
+                  {{ chat.totalChatsUnread }}
+                </BBadge>
+              </button>
             <button 
               class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all" 
               :class="sidebarMode === 'groups' ? 'bg-primary text-white shadow-sm' : 'text-muted'"
               @click="sidebarMode = 'groups'"
             >
-              Groups
-            </button>
+                Groups
+                <BBadge v-if="chat.totalGroupsUnread > 0" variant="danger" pill class="ms-1 shadow-sm" style="font-size: 0.7rem;">
+                  {{ chat.totalGroupsUnread }}
+                </BBadge>
+              </button>
           </div>
         </div>
 
@@ -53,8 +59,8 @@
               <div class="flex-grow-1 overflow-hidden">
                 <div class="d-flex justify-content-between align-items-center">
                   <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
-                  <BBadge v-if="chat.unreadCounts[user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
-                    {{ chat.unreadCounts[user.id] }}
+                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+                    {{ chat.unreadCounts['user_' + user.id] }}
                   </BBadge>
                 </div>
                 <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
@@ -85,8 +91,8 @@
               <div class="flex-grow-1 overflow-hidden">
                 <div class="d-flex justify-content-between align-items-center">
                   <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
-                  <BBadge v-if="chat.unreadCounts[user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
-                    {{ chat.unreadCounts[user.id] }}
+                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+                    {{ chat.unreadCounts['user_' + user.id] }}
                   </BBadge>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">

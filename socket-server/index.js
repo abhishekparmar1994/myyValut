@@ -186,7 +186,7 @@ io.on('connection', (socket) => {
 
     // --- WebRTC Signaling Events ---
     
-    // 1. Initial Call Request
+    // 1. Initial Call Request (1-on-1)
     socket.on('call:initiate', ({ receiverId, type }) => {
         const rId = String(receiverId);
         const room = `user.${rId}`;
@@ -238,6 +238,51 @@ io.on('connection', (socket) => {
         const rId = String(receiverId);
         console.log(`[CALL] end: from ${userId} for ${rId}`);
         io.to(`user.${rId}`).emit('call:ended', { senderId: userId });
+    });
+
+    // --- NEW: Group Call Room Events ---
+
+    socket.on('call:join-room', ({ roomId }) => {
+        const room = `call.room.${roomId}`;
+        socket.join(room);
+        console.log(`[CALL] user ${userId} joined room ${roomId}`);
+        
+        // Notify others in the room that a new user joined
+        socket.to(room).emit('call:user-joined', { userId });
+        
+        // Return current participants to the joining user (optional, can be managed via room state)
+        const participants = Array.from(io.sockets.adapter.rooms.get(room) || [])
+            .map(sid => {
+                const s = io.sockets.sockets.get(sid);
+                return s ? s.user.id : null;
+            })
+            .filter(id => id && id !== userId);
+        
+        socket.emit('call:room-participants', { participants });
+    });
+
+    socket.on('call:leave-room', ({ roomId }) => {
+        const room = `call.room.${roomId}`;
+        socket.leave(room);
+        console.log(`[CALL] user ${userId} left room ${roomId}`);
+        io.to(room).emit('call:user-left', { userId });
+    });
+
+    // Targeted signaling for mesh network
+    socket.on('call:signal', ({ to, signal }) => {
+        console.log(`[CALL] signaling from ${userId} to ${to}`);
+        io.to(`user.${to}`).emit('call:signal', { from: userId, signal });
+    });
+
+    socket.on('call:invite-group', ({ userIds, roomId, type }) => {
+        console.log(`[CALL] group invite from ${userId} to ${userIds} for room ${roomId}`);
+        userIds.forEach(rId => {
+            io.to(`user.${rId}`).emit('call:incoming-group', { 
+                senderId: userId, 
+                roomId, 
+                type: type || 'video' 
+            });
+        });
     });
 
     socket.on('disconnect', () => {

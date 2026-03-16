@@ -118,6 +118,7 @@
                 </BDropdownItem>
                 <BDropdownDivider />
                 <BDropdownItem @click="showUserInfoModal = true">ℹ️ User Info</BDropdownItem>
+                <BDropdownItem @click="openGroupCallInvite">👥 Start Group Call</BDropdownItem>
               </BDropdown>
             </div>
           </div>
@@ -368,9 +369,10 @@
     :is-open="isCallActive"
     :user-name="activeCallUser?.name"
     :local-stream="localStream"
-    :remote-stream="remoteStream"
+    :remote-streams="remoteStreams"
     :active-call-type="activeCallType"
     :call-duration="callDuration"
+    :current-room-id="currentRoomId"
     status-text="In call..."
     @hangup="endCall"
     @mute="toggleMute"
@@ -435,6 +437,51 @@
       </div>
     </div>
   </BModal>
+
+  <!-- Group Call Invite Modal -->
+  <BModal v-model="showGroupInviteModal" title="👥 Start Group Call" centered hide-footer scrollable>
+    <div class="p-2">
+      <p class="text-muted small mb-3">Select participants to invite to the call</p>
+      <div class="user-selection-list mb-4" style="max-height: 300px; overflow-y: auto;">
+        <div v-for="user in chat.users" :key="user.id" 
+          class="d-flex align-items-center gap-3 p-2 rounded-3 cursor-pointer user-item-select mb-2 border transition-all"
+          :class="{ 'bg-primary-subtle border-primary': selectedGroupUsers.includes(user.id) }"
+          @click="toggleUserSelection(user.id)"
+        >
+          <BFormCheckbox :model-value="selectedGroupUsers.includes(user.id)" @change="toggleUserSelection(user.id)" />
+          <BAvatar :src="user.profile_image ? `http://localhost:8000/storage/${user.profile_image}` : null" :text="user.name.charAt(0)" size="2.5rem" />
+          <div class="flex-grow-1">
+            <div class="fw-bold">{{ user.name }}</div>
+            <div class="small" :class="chat.presence[user.id] ? 'text-success' : 'text-muted'">{{ chat.presence[user.id] ? 'Online' : 'Offline' }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <BButton variant="light" class="flex-grow-1 rounded-pill" @click="showGroupInviteModal = false">Cancel</BButton>
+        <BButton variant="primary" class="flex-grow-1 rounded-pill fw-bold" @click="initGroupCall" :disabled="selectedGroupUsers.length === 0">
+          🚀 Start Group Call
+        </BButton>
+      </div>
+    </div>
+  </BModal>
+
+  <!-- Incoming Group Call Modal -->
+  <BModal v-model="showIncomingGroupCall" title="👥 Incoming Group Call" centered hide-footer no-close-on-backdrop>
+    <div class="text-center p-4">
+      <BAvatar size="5rem" variant="primary" text="👥" class="mb-4 shadow" />
+      <h4 class="fw-bold mb-2">Group Call Room</h4>
+      <p class="text-muted mb-4">You have been invited to a group {{ groupCallType === 'video' ? 'Video' : 'Voice' }} Call.</p>
+      
+      <div class="d-flex justify-content-center gap-3">
+        <BButton variant="danger" class="rounded-pill px-4 py-2" @click="showIncomingGroupCall = false">
+          Reject
+        </BButton>
+        <BButton variant="success" class="rounded-pill px-4 py-2" @click="acceptGroupCall">
+          Join Call
+        </BButton>
+      </div>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
@@ -484,17 +531,27 @@ const editingMessageId = ref(null)
 const editingContent = ref('')
 const editingLoading = ref(false)
 
+// Group Call State
+const showGroupInviteModal = ref(false)
+const showIncomingGroupCall = ref(false)
+const selectedGroupUsers = ref([])
+const groupCallRoomId = ref('')
+const groupCallType = ref('video')
+
 // --- WebRTC Call Logic ---
 const { 
   localStream, 
-  remoteStream, 
+  remoteStreams, 
   isCalling: isCallActive, 
   activeCallType, 
   remoteUserId,
+  currentRoomId,
   isConnected,
   callDuration,
   startTime,
   startCall, 
+  joinGroupCall,
+  leaveGroupCall,
   handleOffer, 
   handleAnswer, 
   handleIceCandidate, 
@@ -559,8 +616,9 @@ const endCall = async (reason = 'ended') => {
 
     endWebRTCCall()
     showIncomingCall.value = false // Ensure incoming modal also closes
+    showIncomingGroupCall.value = false
 
-    if (partnerId) {
+    if (partnerId && !currentRoomId.value) {
         // Log the call in history
         let content = ''
         if (reason === 'rejected') {
@@ -581,6 +639,39 @@ const endCall = async (reason = 'ended') => {
     activeCallUser.value = null
     incomingCallerId.value = null
     resetTimer()
+}
+
+const openGroupCallInvite = () => {
+    selectedGroupUsers.value = []
+    if (activeUser.value) selectedGroupUsers.value.push(activeUser.value.id)
+    showGroupInviteModal.value = true
+}
+
+const toggleUserSelection = (userId) => {
+    const idx = selectedGroupUsers.value.indexOf(userId)
+    if (idx > -1) selectedGroupUsers.value.splice(idx, 1)
+    else selectedGroupUsers.value.push(userId)
+}
+
+const initGroupCall = () => {
+    const roomId = 'room_' + Math.random().toString(36).substr(2, 9)
+    groupCallRoomId.value = roomId
+    showGroupInviteModal.value = false
+    
+    // Join the room myself
+    joinGroupCall(roomId, 'video')
+    
+    // Invite others
+    chat.socket.emit('call:invite-group', {
+        roomId,
+        participants: selectedGroupUsers.value,
+        type: 'video'
+    })
+}
+
+const acceptGroupCall = () => {
+    showIncomingGroupCall.value = false
+    joinGroupCall(groupCallRoomId.value, groupCallType.value)
 }
 
 // Setup Socket Listeners for Calls
@@ -607,16 +698,15 @@ watch(() => chat.socket, (socket) => {
     })
 
     socket.on('call:offer', async ({ senderId, offer, type }) => {
-        // Since we already accepted, we can handle the offer
         await handleOffer(senderId, offer, type)
     })
 
-    socket.on('call:answer', async ({ answer }) => {
-        await handleAnswer(answer)
+    socket.on('call:answer', async ({ senderId, answer }) => {
+        await handleAnswer(senderId, answer)
     })
 
-    socket.on('call:ice-candidate', async ({ candidate }) => {
-        await handleIceCandidate(candidate)
+    socket.on('call:ice-candidate', async ({ senderId, candidate }) => {
+        await handleIceCandidate(senderId, candidate)
     })
 
     socket.on('call:rejected', () => {
@@ -627,6 +717,13 @@ watch(() => chat.socket, (socket) => {
     socket.on('call:ended', () => {
         console.log('[CALL] Remote user ended the call')
         endCall()
+    })
+
+    socket.on('call:invite-group', ({ roomId, type }) => {
+        console.log('[CALL] Received group call invitation', roomId)
+        groupCallRoomId.value = roomId
+        groupCallType.value = type
+        showIncomingGroupCall.value = true
     })
 }, { immediate: true })
 // --- End WebRTC Call Logic ---

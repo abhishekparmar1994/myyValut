@@ -8,12 +8,32 @@
           <small class="text-muted" v-if="chat.connected">🟢 Connected</small>
           <small class="text-danger" v-else>🔴 Disconnected</small>
         </div>
+        <div class="px-2 pt-3 mb-2">
+          <div class="d-flex mb-2 gap-1 bg-light p-1 rounded-pill border">
+            <button 
+              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all" 
+              :class="sidebarMode === 'users' ? 'bg-primary text-white shadow-sm' : 'text-muted'"
+              @click="sidebarMode = 'users'"
+            >
+              Chats
+            </button>
+            <button 
+              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all" 
+              :class="sidebarMode === 'groups' ? 'bg-primary text-white shadow-sm' : 'text-muted'"
+              @click="sidebarMode = 'groups'"
+            >
+              Groups
+            </button>
+          </div>
+        </div>
+
         <div class="flex-grow-1 overflow-auto p-2">
           <div v-if="chat.loading" class="text-center py-4"><BSpinner variant="primary" /></div>
           
-          <!-- Online Users -->
-          <div v-if="onlineUsers.length > 0">
-            <small class="text-uppercase fw-bold text-muted px-3 mb-2 d-block" style="font-size: 0.75rem;">Online</small>
+          <template v-if="sidebarMode === 'users'">
+            <!-- Online Users -->
+            <div v-if="onlineUsers.length > 0">
+              <small class="text-uppercase fw-bold text-muted px-3 mb-2 d-block" style="font-size: 0.75rem;">Online</small>
             <div 
               v-for="user in onlineUsers" 
               :key="user.id" 
@@ -80,46 +100,93 @@
           <div v-if="onlineUsers.length === 0 && offlineUsers.length === 0" class="text-center py-5 text-muted">
              <small>No contacts found</small>
           </div>
-        </div>
-      </BCol>
+        </template>
+
+        <template v-else>
+          <!-- Groups List -->
+          <div v-if="chat.rooms.length > 0">
+            <div 
+              v-for="room in chat.rooms" 
+              :key="room.id" 
+              class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all"
+              :class="{ 'bg-primary-subtle border-primary': chat.activeRoomId === room.id }"
+              @click="selectRoom(room)"
+            >
+              <BAvatar :text="room.name.charAt(0)" variant="info" />
+              <div class="flex-grow-1 overflow-hidden">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0 fw-bold">{{ room.name }}</h6>
+                  <BBadge v-if="chat.unreadCounts['room_' + room.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+                    {{ chat.unreadCounts['room_' + room.id] }}
+                  </BBadge>
+                </div>
+                <small class="text-muted d-block">{{ room.members.length }} members</small>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-5 text-muted">
+            <small>No groups found</small>
+          </div>
+          <div class="p-2">
+            <BButton variant="outline-primary" class="w-100 rounded-pill py-2 border-dashed" @click="showNewGroupModal = true">
+              + Create New Group
+            </BButton>
+          </div>
+        </template>
+      </div>
+    </BCol>
 
       <!-- Chat Area -->
       <BCol md="8" class="bg-white d-flex flex-column h-100">
-        <template v-if="activeUser">
+        <template v-if="activeUser || activeRoom">
           <div class="p-4 border-bottom d-flex align-items-center justify-content-between bg-white">
             <div class="d-flex align-items-center gap-3">
-              <BAvatar 
-                v-if="activeUser.profile_image"
-                :src="getProfileImageUrl(activeUser)"
-                variant="info" 
-              />
-              <BAvatar v-else variant="info" :text="activeUser.name.charAt(0)" />
-              <div>
-                <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
-                <small class="text-primary fw-bold blink" v-if="chat.typingUsers[String(activeUser.id)]">typing...</small>
-                <small class="text-success" v-else-if="chat.presence[String(activeUser.id)] === 'online'">Active Now</small>
-                <small class="text-muted" v-else>Offline</small>
-              </div>
+              <template v-if="chat.activeRoomId">
+                <BAvatar :text="activeRoom?.name?.charAt(0)" variant="info" />
+                <div>
+                  <h5 class="mb-0 fw-bold">{{ activeRoom?.name }}</h5>
+                  <small class="text-muted">{{ activeRoom?.members?.length }} members</small>
+                </div>
+              </template>
+              <template v-else-if="activeUser">
+                <BAvatar 
+                  v-if="activeUser.profile_image"
+                  :src="getProfileImageUrl(activeUser)"
+                  variant="info" 
+                />
+                <BAvatar v-else variant="info" :text="activeUser.name?.charAt(0)" />
+                <div>
+                  <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
+                  <small class="text-primary fw-bold blink" v-if="chat.typingUsers[String(activeUser.id)]">typing...</small>
+                  <small class="text-success" v-else-if="chat.presence[String(activeUser.id)] === 'online'">Active Now</small>
+                  <small class="text-muted" v-else>Offline</small>
+                </div>
+              </template>
             </div>
             <div class="d-flex align-items-center gap-2">
-              <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')">
-                <span>📞</span>
-              </BButton>
-              <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('video')">
-                <span>📹</span>
-              </BButton>
+              <template v-if="!chat.activeRoomId && activeUser">
+                <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')">
+                  <span>📞</span>
+                </BButton>
+                <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('video')">
+                  <span>📹</span>
+                </BButton>
+              </template>
               <BDropdown variant="light" size="sm" no-caret rounded="circle">
                 <template #button-content>
                   <span class="fs-5">⋮</span>
                 </template>
-                <BDropdownItem @click="handleToggleBlock">
-                   <span v-if="isBlockedByMe">🔓 Unblock User</span>
-                   <span v-else class="text-danger">🚫 Block User</span>
-                </BDropdownItem>
-                <BDropdownDivider />
-                <BDropdownItem @click="showUserInfoModal = true">ℹ️ User Info</BDropdownItem>
-                <BDropdownItem @click="openGroupCallInvite">👥 Start Group Call</BDropdownItem>
-                <BDropdownItem @click="startScreenSharing">🖥️ Share Screen</BDropdownItem>
+                <template v-if="!chat.activeRoomId && activeUser">
+                  <BDropdownItem @click="handleToggleBlock">
+                     <span v-if="isBlockedByMe">🔓 Unblock User</span>
+                     <span v-else class="text-danger">🚫 Block User</span>
+                  </BDropdownItem>
+                  <BDropdownDivider />
+                  <BDropdownItem @click="showUserInfoModal = true">ℹ️ User Info</BDropdownItem>
+                </template>
+                <template v-else-if="chat.activeRoomId">
+                    <BDropdownItem @click="showRoomInfoModal = true">ℹ️ Group Info</BDropdownItem>
+                </template>
               </BDropdown>
             </div>
           </div>
@@ -164,8 +231,8 @@
                 <!-- Message Avatar -->
                 <BAvatar 
                   size="2.5rem" 
-                  :src="msg.senderId === auth.user?.id ? getProfileImageUrl(auth.user) : getProfileImageUrl(activeUser)" 
-                  :text="msg.senderId === auth.user?.id ? auth.user?.name?.charAt(0) : activeUser.name?.charAt(0)"
+                  :src="msg.senderId === auth.user?.id ? getProfileImageUrl(auth.user) : (msg.roomId ? getProfileImageUrl(msg.sender) : getProfileImageUrl(activeUser))" 
+                  :text="msg.senderId === auth.user?.id ? auth.user?.name?.charAt(0) : (msg.roomId ? msg.sender?.name?.charAt(0) : activeUser?.name?.charAt(0))"
                   variant="light"
                   class="flex-shrink-0 shadow-sm border border-white mb-1"
                 />
@@ -175,6 +242,9 @@
                   :style="msg.senderId === auth.user?.id ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
                   :class="msg.senderId === auth.user?.id ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
                 >
+                  <div v-if="msg.roomId && msg.senderId !== auth.user?.id" class="small fw-bold mb-1 text-primary">
+                    {{ msg.sender?.name }}
+                  </div>
                   <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
                     <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
                       <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
@@ -579,6 +649,38 @@
       </div>
     </div>
   </transition>
+
+  <!-- New Group Modal -->
+  <BModal v-model="showNewGroupModal" title="Create New Group" @ok="createGroup">
+    <BFormGroup label="Group Name" label-for="group-name-input" class="mb-3">
+      <BFormInput id="group-name-input" v-model="newGroupName" placeholder="Enter group name" required />
+    </BFormGroup>
+    
+    <BFormGroup label="Select Members" class="mb-0">
+      <div class="members-selection-list overflow-auto custom-scrollbar" style="max-height: 250px;">
+        <div 
+          v-for="user in chat.users" 
+          :key="user.id" 
+          class="d-flex align-items-center gap-3 p-2 rounded-3 cursor-pointer hover-bg-light"
+          @click="toggleMemberSelection(user.id)"
+        >
+          <BFormCheckbox 
+            :checked="selectedMembersForNewGroup.includes(user.id)" 
+            @change="toggleMemberSelection(user.id)" 
+          />
+          <BAvatar :src="getProfileImageUrl(user)" :text="user.name.charAt(0)" size="sm" />
+          <span>{{ user.name }}</span>
+        </div>
+      </div>
+    </BFormGroup>
+    
+    <template #modal-footer="{ ok, cancel }">
+      <BButton variant="light" @click="cancel()">Cancel</BButton>
+      <BButton variant="primary" :disabled="!newGroupName.trim() || selectedMembersForNewGroup.length === 0" @click="ok()">
+        Create Group
+      </BButton>
+    </template>
+  </BModal>
 </template>
 
 <script setup>
@@ -610,6 +712,12 @@ const auth = useAuthStore()
 const config = useRuntimeConfig()
 const { show: showToast } = useToast()
 
+const sidebarMode = ref('users') // 'users' or 'groups'
+const showNewGroupModal = ref(false)
+const showRoomInfoModal = ref(false)
+const newGroupName = ref('')
+const selectedMembersForNewGroup = ref([])
+
 // State for Document Preview
 const showPreview = ref(false)
 const previewUrl = ref('')
@@ -617,7 +725,12 @@ const previewType = ref('')
 const previewName = ref('')
 
 const newMessage = ref('')
-const activeUser = ref(null)
+const activeUser = computed(() => {
+    return chat.users.find(u => String(u.id) === String(chat.activeUserId)) || null
+})
+const activeRoom = computed(() => {
+    return chat.rooms.find(r => String(r.id) === String(chat.activeRoomId)) || null
+})
 const messageContainer = ref(null)
 const showEmojiPicker = ref(false)
 const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocked: false })
@@ -636,6 +749,12 @@ const showIncomingGroupCall = ref(false)
 const selectedGroupUsers = ref([])
 const groupCallRoomId = ref('')
 const groupCallType = ref('video')
+
+function toggleMemberSelection(userId) {
+    const idx = selectedMembersForNewGroup.value.indexOf(userId)
+    if (idx > -1) selectedMembersForNewGroup.value.splice(idx, 1)
+    else selectedMembersForNewGroup.value.push(userId)
+}
 
 // --- WebRTC Call Logic ---
 const { 
@@ -963,14 +1082,10 @@ watch(() => chat.blockUpdateTrigger, () => {
     checkBlockStatus()
 })
 
-watch(activeUser, async (newVal) => {
-    if (newVal) {
-        chat.activeUserId = newVal.id
-        await chat.fetchHistory(newVal.id)
-        await checkBlockStatus()
+watch([() => chat.activeUserId, () => chat.activeRoomId], async ([newUserId, newRoomId]) => {
+    if (newUserId || newRoomId) {
+        if (!newRoomId) await checkBlockStatus()
         scrollToBottom()
-    } else {
-        chat.activeUserId = null
     }
 })
 
@@ -1098,19 +1213,31 @@ function getProfileImageUrl(user) {
 }
 
 const filteredMessages = computed(() => {
-    if (!activeUser.value) return []
+    if (!chat.activeUserId && !chat.activeRoomId) return []
+    
+    if (chat.activeRoomId) {
+        return chat.messages.filter(m => String(m.roomId) === String(chat.activeRoomId))
+    }
+    
     return chat.messages.filter(m => 
-        (m.senderId == activeUser.value.id && m.receiverId == auth.user?.id) ||
-        (m.senderId == auth.user?.id && m.receiverId == activeUser.value.id)
+        (String(m.senderId) === String(chat.activeUserId) && String(m.receiverId) === String(auth.user?.id)) ||
+        (String(m.senderId) === String(auth.user?.id) && String(m.receiverId) === String(chat.activeUserId))
     )
 })
 
 async function handleSend() {
-    if (!newMessage.value.trim() || !activeUser.value) return
+    if (!newMessage.value.trim() || (!activeUser.value && !activeRoom.value)) return
     
     try {
         const replyToId = chat.replyTo?.id
-        await chat.sendMessage(activeUser.value.id, newMessage.value, 'text', null, replyToId)
+        await chat.sendMessage(
+            chat.activeUserId, 
+            newMessage.value, 
+            'text', 
+            null, 
+            replyToId, 
+            chat.activeRoomId
+        )
         newMessage.value = ''
         scrollToBottom()
     } catch (err) {
@@ -1149,11 +1276,11 @@ function groupReactions(reactions) {
 
 let lastTypingTime = 0
 function handleTyping() {
-    if (!activeUser.value) return
+    if (!activeUser.value && !activeRoom.value) return
     
     const now = Date.now()
     if (now - lastTypingTime > 2000) {
-        chat.sendTyping(activeUser.value.id)
+        chat.sendTyping(chat.activeUserId, chat.activeRoomId)
         lastTypingTime = now
     }
 }

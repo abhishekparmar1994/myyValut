@@ -109,6 +109,26 @@ io.on('connection', (socket) => {
     // Join personal channel
     socket.join(`user.${userId}`);
 
+    // Fetch and join rooms
+    const joinRooms = async () => {
+        try {
+            let token = socket.handshake.auth.token || socket.handshake.headers['authorization'];
+            if (token && !token.startsWith('Bearer ')) token = `Bearer ${token}`;
+            
+            const response = await axios.get(`${API_URL}/rooms`, {
+                headers: { 'Authorization': token }
+            });
+            const rooms = response.data;
+            rooms.forEach(room => {
+                socket.join(`room.${room.id}`);
+                console.log(`[SOCKET] User ${userId} joined room ${room.id}`);
+            });
+        } catch (err) {
+            console.error('[SOCKET] Failed to join rooms on connect', err.message);
+        }
+    };
+    joinRooms();
+
     // Send the current online list to the new user
     const currentOnline = {};
     onlineUsers.forEach((sid, uid) => {
@@ -120,8 +140,8 @@ io.on('connection', (socket) => {
     io.emit('presence.update', { userId, status: 'online' });
 
     // Handle incoming chat messages (Client to Client via Server)
-    socket.on('chat.send', async ({ receiverId, content, type, fileName, replyToId }, callback) => {
-        if (!receiverId || !content) {
+    socket.on('chat.send', async ({ receiverId, roomId, content, type, fileName, replyToId }, callback) => {
+        if ((!receiverId && !roomId) || !content) {
             return callback({ status: 'error', message: 'Invalid payload' });
         }
 
@@ -138,6 +158,7 @@ io.on('connection', (socket) => {
             // Persist via Laravel API
             const response = await axios.post(`${API_URL}/messages`, {
                 receiver_id: receiverId,
+                room_id: roomId,
                 content,
                 type: type || 'text',
                 file_name: fileName,
@@ -152,17 +173,21 @@ io.on('connection', (socket) => {
             const savedMessage = response.data;
             console.log(`[API] Message saved with ID: ${savedMessage.id}`);
 
-            // Relay to receiver with FULL context
-            io.to(`user.${receiverId}`).emit('message.received', {
+            const channel = roomId ? `room.${roomId}` : `user.${receiverId}`;
+            
+            // Relay to receiver/room with FULL context
+            io.to(channel).emit('message.received', {
                 id: savedMessage.id,
                 senderId: userId,
                 receiverId: receiverId,
+                roomId: roomId,
                 content: savedMessage.content,
                 type: savedMessage.type,
                 fileName: savedMessage.file_name,
                 timestamp: savedMessage.created_at,
                 reply_to: savedMessage.reply_to,
                 reply_to_id: savedMessage.reply_to_id,
+                sender: savedMessage.sender,
                 is_read: false,
                 reactions: []
             })
@@ -175,13 +200,15 @@ io.on('connection', (socket) => {
     })
 
     // Typing Indicators
-    socket.on('chat.typing', (payload) => {
-        socket.to(`user.${payload.receiverId}`).emit('chat.typing', { userId });
+    socket.on('chat.typing', ({ receiverId, roomId }) => {
+        const channel = roomId ? `room.${roomId}` : `user.${receiverId}`;
+        socket.to(channel).emit('chat.typing', { userId, roomId });
     });
 
     // Read Receipts
-    socket.on('chat.read', (payload) => {
-        socket.to(`user.${payload.receiverId}`).emit('chat.read', { userId });
+    socket.on('chat.read', ({ receiverId, roomId }) => {
+        const channel = roomId ? `room.${roomId}` : `user.${receiverId}`;
+        socket.to(channel).emit('chat.read', { userId, roomId });
     });
 
     // --- WebRTC Signaling Events ---

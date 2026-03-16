@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\UserBlocksController;
+use App\Http\Controllers\Api\RoomController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -79,4 +80,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/blocks', [UserBlocksController::class, 'index']);
     Route::post('/blocks/toggle', [UserBlocksController::class, 'toggle']);
     Route::get('/blocks/check/{userId}', [UserBlocksController::class, 'check']);
+
+    // Groups / Rooms
+    Route::get('/rooms', [RoomController::class, 'index']);
+    Route::post('/rooms', [RoomController::class, 'store']);
+    Route::get('/rooms/{room}', [RoomController::class, 'show']);
+    Route::put('/rooms/{room}', [RoomController::class, 'update']);
+    Route::post('/rooms/{room}/add-members', [RoomController::class, 'addMembers']);
+    Route::post('/rooms/{room}/leave', [RoomController::class, 'leave']);
 });

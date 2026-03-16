@@ -36,8 +36,8 @@ class User extends Authenticatable
 
     public function getProfileImageUrlAttribute()
     {
-        return $this->profile_image 
-            ? asset('storage/' . $this->profile_image) 
+        return $this->profile_image
+            ? asset('storage/' . $this->profile_image)
             : null;
     }
 
@@ -45,8 +45,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
-            'date_of_birth'     => 'date',
+            'password' => 'hashed',
+            'date_of_birth' => 'date',
         ];
     }
 
@@ -88,5 +88,17 @@ class User extends Authenticatable
     public function transactions()
     {
         return $this->hasMany(\App\Models\Transaction::class);
+    }
+
+    public function rooms()
+    {
+        return $this->belongsToMany(\App\Models\Room::class , 'room_members')
+            ->withPivot('role', 'last_read_at')
+            ->withTimestamps();
+    }
+
+    public function roomMembers()
+    {
+        return $this->hasMany(\App\Models\RoomMember::class);
     }
 }

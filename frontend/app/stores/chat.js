@@ -18,6 +18,8 @@ export const useChatStore = defineStore('chat', () => {
     const blockUpdateTrigger = ref(0)
     const notificationPermission = ref('default')
     const unreadCounts = ref({})
+    const rooms = ref([])
+    const activeRoomId = ref(null)
 
     const totalUnreadCount = computed(() => {
         return Object.values(unreadCounts.value).reduce((sum, count) => sum + (count || 0), 0)
@@ -27,6 +29,7 @@ export const useChatStore = defineStore('chat', () => {
         if (socket.value) return
         
         fetchUsers()
+        fetchRooms()
         fetchBlockedUsers()
         fetchUnreadCounts()
 
@@ -93,7 +96,11 @@ export const useChatStore = defineStore('chat', () => {
 
         socket.value.on('message.received', (message) => {
             // Only push if the message belongs to the active conversation
-            if (activeUserId.value && String(message.senderId) === String(activeUserId.value)) {
+            const isMatch = message.roomId 
+                ? String(message.roomId) === String(activeRoomId.value)
+                : activeUserId.value && String(message.senderId) === String(activeUserId.value)
+
+            if (isMatch) {
                 messages.value = [...messages.value, message]
             }
             
@@ -134,10 +141,16 @@ export const useChatStore = defineStore('chat', () => {
             typingUsers.value = { ...typingUsers.value, [uid]: timeout }
         })
 
-        socket.value.on('chat.read', ({ userId }) => {
-            if (activeUserId.value && String(userId) === String(activeUserId.value)) {
+        socket.value.on('chat.read', ({ userId, roomId }) => {
+            const isMatch = roomId 
+                ? String(roomId) === String(activeRoomId.value)
+                : activeUserId.value && String(userId) === String(activeUserId.value)
+
+            if (isMatch) {
                 messages.value.forEach(m => {
-                    if (m.senderId == auth.user?.id && m.receiverId == userId) {
+                    const isSentByMe = m.senderId == auth.user?.id
+                    const isRelevant = roomId ? m.roomId == roomId : m.receiverId == userId
+                    if (isSentByMe && isRelevant) {
                         m.is_read = true
                     }
                 })
@@ -157,13 +170,16 @@ export const useChatStore = defineStore('chat', () => {
 
             // Increment unread count if it's not from me AND we're not currently looking at this chat
             const isFromOther = payload.message.sender_id != auth.user?.id
-            const isCurrentChat = String(payload.message.sender_id) === String(activeUserId.value)
+            const isCurrentChat = payload.message.room_id 
+                ? String(payload.message.room_id) === String(activeRoomId.value)
+                : String(payload.message.sender_id) === String(activeUserId.value)
             
             if (isFromOther) {
                 if (!isCurrentChat) {
-                    unreadCounts.value[payload.message.sender_id] = (unreadCounts.value[payload.message.sender_id] || 0) + 1
+                    const key = payload.message.room_id ? `room_${payload.message.room_id}` : `user_${payload.message.sender_id}`
+                    unreadCounts.value[key] = (unreadCounts.value[key] || 0) + 1
                 } else {
-                    sendRead(payload.message.sender_id)
+                    sendRead(payload.message.sender_id, payload.message.room_id)
                 }
             }
         })
@@ -226,16 +242,28 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null) {
+    async function fetchRooms() {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/rooms`, {
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            rooms.value = data
+        } catch (err) {
+            console.error('Failed to fetch rooms', err)
+        }
+    }
+
+    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null, roomId = null) {
         if (!socket.value) {
             console.error('Socket not connected. Cannot send message.')
             return Promise.reject(new Error('Socket not connected'))
         }
 
-        console.log(`Emitting chat.send to ${receiverId}...`, { content, type, fileName, replyToId })
+        console.log(`Emitting chat.send to ${roomId ? 'room ' + roomId : receiverId}...`, { content, type, fileName, replyToId })
 
         return new Promise((resolve, reject) => {
-            socket.value.emit('chat.send', { receiverId, content, type, fileName, replyToId }, (response) => {
+            socket.value.emit('chat.send', { receiverId, roomId, content, type, fileName, replyToId }, (response) => {
                 console.log('Received acknowledgment for chat.send:', response)
                 if (response.status === 'ok') {
                     // We'll let the event echo or just push local
@@ -243,6 +271,7 @@ export const useChatStore = defineStore('chat', () => {
                         id: response.id,
                         senderId: auth.user.id,
                         receiverId,
+                        roomId,
                         content,
                         type,
                         fileName,
@@ -263,20 +292,27 @@ export const useChatStore = defineStore('chat', () => {
         })
     }
 
-    function sendTyping(receiverId) {
+    function sendTyping(receiverId, roomId = null) {
         if (!socket.value) return
-        socket.value.emit('chat.typing', { receiverId })
+        socket.value.emit('chat.typing', { receiverId, roomId })
     }
 
-    async function fetchHistory(receiverId) {
+    async function fetchHistory(id, isRoom = false) {
         const config = useRuntimeConfig()
         loadingMessages.value = true
         messages.value = [] 
         pinnedMessage.value = null
-        activeUserId.value = receiverId
+        
+        if (isRoom) {
+            activeRoomId.value = id
+            activeUserId.value = null
+        } else {
+            activeUserId.value = id
+            activeRoomId.value = null
+        }
         
         try {
-            const data = await $fetch(`${config.public.apiBase}/messages/${receiverId}`, {
+            const data = await $fetch(`${config.public.apiBase}/messages/${id}?is_room=${isRoom}`, {
                 headers: { Authorization: `Bearer ${auth.token}` }
             })
             
@@ -302,7 +338,7 @@ export const useChatStore = defineStore('chat', () => {
             messages.value = historical
             
             // Mark these as read
-            sendRead(receiverId)
+            sendRead(activeUserId.value, activeRoomId.value)
 
         } catch (err) {
             console.error('Failed to fetch history', err)
@@ -387,17 +423,19 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function sendRead(receiverId) {
+    function sendRead(receiverId, roomId = null) {
         if (!socket.value) return
-        socket.value.emit('chat.read', { receiverId })
+        socket.value.emit('chat.read', { receiverId, roomId })
 
         // Reset local unread count
-        if (unreadCounts.value[receiverId]) {
-            unreadCounts.value[receiverId] = 0
+        const key = roomId ? `room_${roomId}` : `user_${receiverId}`
+        if (unreadCounts.value[key]) {
+            unreadCounts.value[key] = 0
         }
         // Also hit API to persist read status
         const config = useRuntimeConfig()
-        $fetch(`${config.public.apiBase}/messages/read/${receiverId}`, {
+        const url = roomId ? `${config.public.apiBase}/messages/read/${roomId}?is_room=true` : `${config.public.apiBase}/messages/read/${receiverId}`
+        $fetch(url, {
             method: 'POST',
             headers: { Authorization: `Bearer ${auth.token}` }
         }).catch(e => console.error('Failed to mark as read', e))
@@ -487,6 +525,8 @@ export const useChatStore = defineStore('chat', () => {
         notificationPermission,
         unreadCounts,
         totalUnreadCount,
+        rooms,
+        activeRoomId,
         init,
         fetchUsers,
         fetchBlockedUsers,

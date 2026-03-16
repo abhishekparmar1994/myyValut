@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\MessageReaction;
 use App\Models\PinnedMessage;
+use App\Models\Room;
+use App\Models\RoomMember;
 use App\Events\SystemNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -14,29 +16,38 @@ use Exception;
 
 class MessagesController extends Controller
 {
-    public function index(Request $request, $receiverId)
+    public function index(Request $request, $id)
     {
         $userId = $request->user()->id;
+        $isRoom = $request->query('is_room') === 'true';
 
-        $messages = Message::where(function ($query) use ($userId, $receiverId) {
-            $query->where('sender_id', $userId)
-                ->where('receiver_id', $receiverId);
-        })->orWhere(function ($query) use ($userId, $receiverId) {
-            $query->where('sender_id', $receiverId)
-                ->where('receiver_id', $userId);
-        })
-            ->whereDoesntHave('deletions', function ($q) use ($userId) {
+        $query = Message::query();
+
+        if ($isRoom) {
+            $query->where('room_id', $id);
+        } else {
+            $query->where(function ($q) use ($userId, $id) {
+                $q->where('sender_id', $userId)->where('receiver_id', $id);
+            })->orWhere(function ($q) use ($userId, $id) {
+                $q->where('sender_id', $id)->where('receiver_id', $userId);
+            })->whereNull('room_id');
+        }
+
+        $messages = $query->whereDoesntHave('deletions', function ($q) use ($userId) {
                 $q->where('user_id', $userId);
             })
-            ->with(['reactions', 'replyTo'])
+            ->with(['reactions', 'replyTo', 'sender'])
             ->orderBy('created_at', 'asc')
             ->get();
 
-        $pinned = \App\Models\PinnedMessage::where(function ($q) use ($userId, $receiverId) {
-            $q->where('user1_id', $userId)->where('user2_id', $receiverId);
-        })->orWhere(function ($q) use ($userId, $receiverId) {
-            $q->where('user1_id', $receiverId)->where('user2_id', $userId);
-        })->with('message.reactions')->first();
+        $pinned = null;
+        if (!$isRoom) {
+            $pinned = \App\Models\PinnedMessage::where(function ($q) use ($userId, $id) {
+                $q->where('user1_id', $userId)->where('user2_id', $id);
+            })->orWhere(function ($q) use ($userId, $id) {
+                $q->where('user1_id', $id)->where('user2_id', $userId);
+            })->with('message.reactions')->first();
+        }
 
         return response()->json([
             'messages' => $messages,
@@ -47,7 +58,8 @@ class MessagesController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'receiver_id' => 'required|exists:users,id',
+            'receiver_id' => 'required_without:room_id|exists:users,id',
+            'room_id' => 'required_without:receiver_id|exists:rooms,id',
             'content' => 'required|string',
             'type' => 'nullable|string',
             'file_name' => 'nullable|string',
@@ -60,40 +72,70 @@ class MessagesController extends Controller
 
         $senderId = $request->user()->id;
         $receiverId = $request->receiver_id;
+        $roomId = $request->room_id;
 
-        // Check for active blocks
-        $isBlocked = \App\Models\UserBlock::where(function ($query) use ($senderId, $receiverId) {
-            $query->where('blocker_id', $senderId)
-                ->where('blocked_id', $receiverId);
-        })->orWhere(function ($query) use ($senderId, $receiverId) {
-            $query->where('blocker_id', $receiverId)
-                ->where('blocked_id', $senderId);
-        })->exists();
+        if ($receiverId) {
+            // Check for active blocks
+            $isBlocked = \App\Models\UserBlock::where(function ($query) use ($senderId, $receiverId) {
+                $query->where('blocker_id', $senderId)
+                    ->where('blocked_id', $receiverId);
+            })->orWhere(function ($query) use ($senderId, $receiverId) {
+                $query->where('blocker_id', $receiverId)
+                    ->where('blocked_id', $senderId);
+            })->exists();
 
-        if ($isBlocked) {
-            return response()->json(['error' => 'Communication unavailable due to an active block.'], 403);
+            if ($isBlocked) {
+                return response()->json(['error' => 'Communication unavailable due to an active block.'], 403);
+            }
         }
 
         $message = Message::create([
-            'sender_id' => $request->user()->id,
-            'receiver_id' => $request->receiver_id,
+            'sender_id' => $senderId,
+            'receiver_id' => $receiverId,
+            'room_id' => $roomId,
             'content' => $request->content,
             'type' => $request->type ?? 'text',
             'file_name' => $request->file_name,
             'reply_to_id' => $request->reply_to_id,
         ]);
 
-        $message->load('replyTo');
+        $message->load(['replyTo', 'sender']);
+
+        // Notification logic
+        $payload = [
+            'type' => 'message_received',
+            'message' => $message,
+        ];
+
+        if ($roomId) {
+            $room = \App\Models\Room::with('members')->find($roomId);
+            foreach ($room->members as $member) {
+                if ($member->id !== $senderId) {
+                    event(new SystemNotification($payload, $member->id));
+                }
+            }
+        } else {
+            event(new SystemNotification($payload, $receiverId));
+        }
 
         return response()->json($message, 201);
     }
 
-    public function markAsRead(Request $request, $senderId)
+    public function markAsRead(Request $request, $id)
     {
-        Message::where('sender_id', $senderId)
-            ->where('receiver_id', $request->user()->id)
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
+        $isRoom = $request->query('is_room') === 'true';
+        $userId = $request->user()->id;
+
+        if ($isRoom) {
+            RoomMember::where('room_id', $id)
+                ->where('user_id', $userId)
+                ->update(['last_read_at' => now()]);
+        } else {
+            Message::where('sender_id', $id)
+                ->where('receiver_id', $userId)
+                ->where('is_read', false)
+                ->update(['is_read' => true]);
+        }
 
         return response()->json(['status' => 'success']);
     }
@@ -102,7 +144,9 @@ class MessagesController extends Controller
     {
         $userId = $request->user()->id;
         
+        // DM counts
         $counts = Message::where('receiver_id', $userId)
+            ->whereNull('room_id')
             ->where('is_read', false)
             ->where('is_deleted_everyone', false)
             ->whereDoesntHave('deletions', function ($q) use ($userId) {
@@ -111,7 +155,31 @@ class MessagesController extends Controller
             ->groupBy('sender_id')
             ->selectRaw('sender_id, count(*) as count')
             ->get()
-            ->pluck('count', 'sender_id');
+            ->pluck('count', 'sender_id')
+            ->mapWithKeys(function ($count, $senderId) {
+                return ["user_$senderId" => $count];
+            })
+            ->toArray();
+
+        // Room counts
+        $roomMembers = RoomMember::where('user_id', $userId)->get();
+        foreach ($roomMembers as $member) {
+            $roomUnread = Message::where('room_id', $member->room_id)
+                ->where('sender_id', '!=', $userId)
+                ->where(function ($q) use ($member) {
+                    if ($member->last_read_at) {
+                        $q->where('created_at', '>', $member->last_read_at);
+                    }
+                })
+                ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->count();
+            
+            if ($roomUnread > 0) {
+                $counts["room_{$member->room_id}"] = $roomUnread;
+            }
+        }
 
         return response()->json($counts);
     }

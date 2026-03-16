@@ -1,12 +1,12 @@
 <template>
-  <BContainer fluid class="chat-container px-4 py-3" :class="{ 'earthquake-shake': chat.isShaking }">
+  <BContainer fluid class="chat-container px-0 py-0 px-md-4 py-md-3" :class="{ 'earthquake-shake': chat.isShaking }">
     <!-- Poke Overlay -->
     <div v-if="chat.isShaking" class="poke-overlay">
        <div class="poke-text">ATTENTION!</div>
     </div>
     <BRow class="chat-wrapper shadow-lg rounded-4 overflow-hidden border bg-white m-0">
       <!-- Users List -->
-      <BCol md="4" lg="3" class="bg-white border-end d-flex flex-column h-100">
+      <BCol :md="4" :lg="3" class="bg-white border-end d-flex flex-column h-100" :class="{ 'd-none d-md-flex': chat.activeUserId || chat.activeRoomId }">
         <div class="p-4 border-bottom bg-light">
           <h4 class="fw-bold mb-0 text-primary">Messages</h4>
           <small class="text-muted" v-if="chat.connected">🟢 Connected</small>
@@ -147,10 +147,14 @@
     </BCol>
 
       <!-- Chat Area -->
-      <BCol md="8" class="bg-white d-flex flex-column h-100">
-        <template v-if="activeUser || activeRoom">
-          <div class="p-4 border-bottom d-flex align-items-center justify-content-between bg-white">
-            <div class="d-flex align-items-center gap-3">
+      <BCol :md="8" :lg="9" class="bg-white d-flex flex-column h-100" :class="{ 'd-none d-md-flex': !chat.activeUserId && !chat.activeRoomId }">
+        <template v-if="chat.activeUserId || chat.activeRoomId">
+          <div class="p-4 border-bottom d-flex align-items-center justify-content-between bg-white px-3 px-md-4">
+            <div class="d-flex align-items-center gap-2 gap-md-3 overflow-hidden">
+              <!-- Back Button (Mobile Only) -->
+              <BButton variant="light" size="sm" class="d-md-none rounded-circle p-2 me-1" @click="chat.activeUserId = null; chat.activeRoomId = null">
+                <span>🔙</span>
+              </BButton>
               <template v-if="chat.activeRoomId">
                 <BAvatar :text="activeRoom?.name?.charAt(0)" variant="info" />
                 <div :class="{ 'cursor-pointer': isAdmin }" @click="isAdmin ? openManageGroup() : null">
@@ -1663,6 +1667,19 @@ watch(filteredMessages, () => {
     background: #f8fafc;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
+}
+
+@media (max-width: 767.98px) {
+    .chat-container {
+        height: calc(100vh - 80px);
+        max-height: calc(100vh - 80px);
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    .chat-wrapper {
+        border-radius: 0 !important;
+        border: none !important;
+    }
 }
 
 .chat-wrapper {

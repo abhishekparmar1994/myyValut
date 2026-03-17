@@ -79,6 +79,7 @@ class MessagesController extends Controller
             'type' => 'nullable|string',
             'file_name' => 'nullable|string',
             'reply_to_id' => 'nullable|exists:messages,id',
+            'is_forwarded' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -112,6 +113,7 @@ class MessagesController extends Controller
             'type' => $request->type ?? 'text',
             'file_name' => $request->file_name,
             'reply_to_id' => $request->reply_to_id,
+            'is_forwarded' => $request->is_forwarded ?? false,
         ]);
 
         $message->load(['replyTo', 'sender']);

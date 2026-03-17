@@ -378,7 +378,7 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null, roomId = null) {
+    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null, roomId = null, isForwarded = false) {
         if (!socket.value) {
             console.error('Socket not connected. Cannot send message.')
             return Promise.reject(new Error('Socket not connected'))
@@ -391,8 +391,8 @@ export const useChatStore = defineStore('chat', () => {
         const finalContent = encryptMessage(content, vaultKey.value)
 
         const payload = isGroup 
-            ? { roomId, content: finalContent, type, fileName, replyToId } 
-            : { receiverId, content: finalContent, type, fileName, replyToId }
+            ? { roomId, content: finalContent, type, fileName, replyToId, isForwarded } 
+            : { receiverId, content: finalContent, type, fileName, replyToId, isForwarded }
 
         console.log(`Emitting ${eventName} to ${isGroup ? 'room ' + roomId : 'user ' + receiverId}...`, payload)
 
@@ -415,6 +415,7 @@ export const useChatStore = defineStore('chat', () => {
                             reply_to: replyTo.value,
                             timestamp: response.timestamp,
                             isMe: true,
+                            is_forwarded: isForwarded,
                             reactions: [],
                             sender: auth.user
                         }

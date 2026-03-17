@@ -62,7 +62,6 @@
         </div>
 
         <div class="flex-grow-1 overflow-auto p-2">
-          <div v-if="chat.loading" class="text-center py-4"><BSpinner variant="primary" /></div>
           
           <template v-if="sidebarMode === 'users'">
             <!-- Online Users -->
@@ -291,15 +290,12 @@
               <!-- Empty State: No Messages -->
               <div v-if="filteredMessages.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 py-5 text-center">
                 <div class="bg-white rounded-circle shadow-sm p-4 mb-4" style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                  <span class="fs-1">👋</span>
+                  <span class="fs-1">💬</span>
                 </div>
                 <h4 class="fw-bold mb-2">No messages here yet</h4>
-                <p class="text-muted mb-4 px-4" style="max-width: 300px;">
+                <p class="text-muted px-4" style="max-width: 300px;">
                   Send a message to start a conversation with <strong>{{ activeUser?.name || activeRoom?.name }}</strong>
                 </p>
-                <BButton variant="primary" pill class="px-4 shadow-sm" @click="newMessage = 'Hello!'; $nextTick(() => $refs.newMessageInput?.focus())">
-                  Say Hello!
-                </BButton>
               </div>
 
               <template v-else v-for="msg in filteredMessages" :key="msg.id">
@@ -339,6 +335,7 @@
                       <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
                         <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
                          <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
+                         <BDropdownItem @click="openForwardModal(msg)">⏩ Forward</BDropdownItem>
                          <BDropdownItem v-if="canEdit(msg)" @click="startEditing(msg)">✏️ Edit Message</BDropdownItem>
                          <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
                          <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
@@ -359,6 +356,10 @@
                      <span class="opacity-50">🚫</span> This message was deleted
                   </div>
                   <template v-else>
+                    <!-- Forward Indicator -->
+                    <div v-if="msg.is_forwarded" class="fst-italic opacity-75 mb-1 d-flex gap-1 align-items-center" style="font-size: 0.7rem;">
+                      <span>⏩</span> <span>Forwarded</span>
+                    </div>
                     <div v-if="msg.type === 'text'">
                         <div v-if="editingMessageId === msg.id" class="edit-container mt-1">
                             <BFormTextarea v-model="editingContent" rows="2" class="mb-2 bg-light shadow-none border-0" />
@@ -926,6 +927,71 @@
       </BButton>
     </template>
   </BModal>
+
+  <!-- Forward Message Modal -->
+  <BModal v-model="showForwardModal" title="Forward Message" hide-footer centered>
+    <div class="p-3">
+      <BFormInput 
+        v-model="forwardSearch" 
+        placeholder="Search contacts or groups..." 
+        class="mb-3 rounded-pill bg-light border-0 shadow-none px-3 py-2"
+      />
+      <div style="max-height: 350px; overflow-y: auto;" class="custom-scrollbar pr-2">
+        <template v-if="forwardFilteredUsers.length > 0">
+          <h6 class="text-muted small fw-bold mb-2">Users</h6>
+          <div 
+            v-for="user in forwardFilteredUsers" 
+            :key="'user-'+user.id" 
+            class="d-flex justify-content-between align-items-center mb-2 p-2 rounded hover-bg-light cursor-pointer border"
+            @click="toggleForwardSelection(user.id, false)"
+          >
+            <div class="d-flex align-items-center gap-2">
+              <BFormCheckbox 
+                  :checked="isTargetSelected(user.id, false)" 
+                  @change="toggleForwardSelection(user.id, false)" 
+                  @click.stop 
+               />
+              <BAvatar :src="getProfileImageUrl(user)" :text="user.name.charAt(0)" size="sm" variant="info" />
+              <span class="fw-bold">{{ user.name }}</span>
+            </div>
+          </div>
+        </template>
+        
+        <template v-if="forwardFilteredRooms.length > 0">
+          <h6 class="text-muted small fw-bold mt-4 mb-2">Groups</h6>
+          <div 
+            v-for="room in forwardFilteredRooms" 
+            :key="'room-'+room.id" 
+            class="d-flex justify-content-between align-items-center mb-2 p-2 rounded hover-bg-light cursor-pointer border"
+            @click="toggleForwardSelection(room.id, true)"
+          >
+            <div class="d-flex align-items-center gap-2">
+              <BFormCheckbox 
+                  :checked="isTargetSelected(room.id, true)" 
+                  @change="toggleForwardSelection(room.id, true)" 
+                  @click.stop 
+               />
+              <div class="bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center rounded-circle" style="width: 30px; height: 30px; flex-shrink: 0;">
+                <span class="fw-bold">{{ room.name.charAt(0).toUpperCase() }}</span>
+              </div>
+              <span class="fw-bold">{{ room.name }}</span>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="forwardFilteredUsers.length === 0 && forwardFilteredRooms.length === 0" class="text-center text-muted p-4">
+            No contacts or groups found.
+        </div>
+      </div>
+      
+      <div v-if="selectedForwardTargets.length > 0" class="mt-3 pt-3 border-top text-end">
+         <BButton variant="primary" pill class="fw-bold px-4 shadow-sm" @click="forwardToSelected" :disabled="forwarding">
+             <BSpinner small v-if="forwarding" class="me-1" />
+             Send to {{ selectedForwardTargets.length }} {{ selectedForwardTargets.length === 1 ? 'chat' : 'chats' }}
+         </BButton>
+      </div>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
@@ -987,6 +1053,81 @@ const newMessage = ref('')
 const userSearch = ref('')
 const messageSearch = ref('')
 const showSearchMessages = ref(false)
+
+// Forward State
+const showForwardModal = ref(false)
+const forwardMessageItem = ref(null)
+const forwardSearch = ref('')
+const selectedForwardTargets = ref([]) // Array of { id, isRoom }
+const forwarding = ref(false)
+
+const forwardFilteredUsers = computed(() => {
+    let s = forwardSearch.value.toLowerCase();
+    const allUsers = chat.users.filter(u => String(u.id) !== String(auth.user?.id));
+    if(!s) return allUsers;
+    return allUsers.filter(u => u.name.toLowerCase().includes(s));
+});
+
+const forwardFilteredRooms = computed(() => {
+    let s = forwardSearch.value.toLowerCase();
+    if(!s) return chat.rooms;
+    return chat.rooms.filter(r => r.name.toLowerCase().includes(s));
+});
+
+function openForwardModal(msg) {
+    forwardMessageItem.value = msg;
+    forwardSearch.value = '';
+    selectedForwardTargets.value = [];
+    showForwardModal.value = true;
+}
+
+function isTargetSelected(id, isRoom) {
+    return selectedForwardTargets.value.some(t => String(t.id) === String(id) && t.isRoom === isRoom);
+}
+
+function toggleForwardSelection(id, isRoom) {
+    const idx = selectedForwardTargets.value.findIndex(t => String(t.id) === String(id) && t.isRoom === isRoom);
+    if (idx !== -1) {
+        selectedForwardTargets.value.splice(idx, 1);
+    } else {
+        selectedForwardTargets.value.push({ id, isRoom });
+    }
+}
+
+async function forwardToSelected() {
+    if(!forwardMessageItem.value || selectedForwardTargets.value.length === 0) return;
+    
+    forwarding.value = true;
+    
+    try {
+        const msg = forwardMessageItem.value;
+        const promises = selectedForwardTargets.value.map(target => {
+            const recipientId = target.isRoom ? null : target.id;
+            const roomId = target.isRoom ? target.id : null;
+            
+            return chat.sendMessage(
+                recipientId, 
+                msg.content, 
+                msg.type, 
+                msg.fileName, 
+                null, // Do not preserve reply-to reference when forwarding
+                roomId,
+                true // isForwarded
+            );
+        });
+        
+        await Promise.all(promises);
+        
+        showToast({ title: 'Success', body: `Message forwarded to ${selectedForwardTargets.value.length} chats.`, variant: 'success' });
+        showForwardModal.value = false;
+    } catch(err) {
+        console.error('Failed to forward', err);
+        showToast({ title: 'Error', body: 'Some forwards failed.', variant: 'danger' });
+    } finally {
+        forwarding.value = false;
+    }
+}
+
 const activeUser = computed(() => {
     return chat.users.find(u => String(u.id) === String(chat.activeUserId)) || null
 })

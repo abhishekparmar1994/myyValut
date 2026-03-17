@@ -17,13 +17,17 @@ class Message extends Model
         'is_read',
         'reply_to_id',
         'is_deleted_everyone',
-        'is_edited'
+        'is_edited',
+        'is_forwarded',
+        'link_metadata'
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
         'is_deleted_everyone' => 'boolean',
-        'is_edited' => 'boolean'
+        'is_edited' => 'boolean',
+        'is_forwarded' => 'boolean',
+        'link_metadata' => 'array'
     ];
 
     public function deletions()

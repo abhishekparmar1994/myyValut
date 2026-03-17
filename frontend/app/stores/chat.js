@@ -13,6 +13,9 @@ export const useChatStore = defineStore('chat', () => {
     const typingUsers = ref({}) // { userId: timeoutId }
     const connected = ref(false)
     const loadingMessages = ref(false)
+    const historyPage = ref(1)
+    const hasMoreHistory = ref(true)
+    const isLoadingMore = ref(false)
     const users = ref([])
     const blockedUsers = ref([])
     const pinnedMessage = ref(null)
@@ -129,9 +132,20 @@ export const useChatStore = defineStore('chat', () => {
                 const exists = messages.value.some(m => String(m.id) === String(message.id))
                 if (!exists) {
                     const decrypted = decryptMessage(message.content, vaultKey.value)
+                    
+                    // Robust metadata handling
+                    let meta = message.link_metadata || null
+                    if (typeof meta === 'string' && meta.trim()) {
+                        try { meta = JSON.parse(meta) } catch (e) {}
+                    }
+                    if (meta && Object.keys(meta).length === 0) meta = null
+
+                    console.log('[CHAT] Received message with metadata:', meta)
+
                     messages.value = [...messages.value, {
                         ...message,
                         content: decrypted,
+                        link_metadata: meta,
                         isMe: String(message.senderId) === String(auth.user?.id)
                     }]
                 }
@@ -378,7 +392,7 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
-    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null, roomId = null, isForwarded = false) {
+    function sendMessage(receiverId, content, type = 'text', fileName = null, replyToId = null, roomId = null, isForwarded = false, linkMetadata = null) {
         if (!socket.value) {
             console.error('Socket not connected. Cannot send message.')
             return Promise.reject(new Error('Socket not connected'))
@@ -391,8 +405,8 @@ export const useChatStore = defineStore('chat', () => {
         const finalContent = encryptMessage(content, vaultKey.value)
 
         const payload = isGroup 
-            ? { roomId, content: finalContent, type, fileName, replyToId, isForwarded } 
-            : { receiverId, content: finalContent, type, fileName, replyToId, isForwarded }
+            ? { roomId, content: finalContent, type, fileName, replyToId, isForwarded, linkMetadata } 
+            : { receiverId, content: finalContent, type, fileName, replyToId, isForwarded, linkMetadata }
 
         console.log(`Emitting ${eventName} to ${isGroup ? 'room ' + roomId : 'user ' + receiverId}...`, payload)
 
@@ -413,6 +427,7 @@ export const useChatStore = defineStore('chat', () => {
                             fileName,
                             reply_to_id: replyToId,
                             reply_to: replyTo.value,
+                            link_metadata: linkMetadata,
                             timestamp: response.timestamp,
                             isMe: true,
                             is_forwarded: isForwarded,
@@ -459,6 +474,9 @@ export const useChatStore = defineStore('chat', () => {
             activeRoomId.value = null
         }
         
+        historyPage.value = 1
+        hasMoreHistory.value = true
+        
         if (conversationCache.value[newKey]) {
             messages.value = conversationCache.value[newKey]
             loadingMessages.value = false // Instant view from cache
@@ -476,23 +494,36 @@ export const useChatStore = defineStore('chat', () => {
             // Handle new response format { messages, pagination, pinned }
             const msgs = data.messages || []
             pinnedMessage.value = data.pinned || null
+            if (data.pagination) {
+                hasMoreHistory.value = data.pagination.current_page < data.pagination.last_page
+            }
 
-            const historical = msgs.map(m => ({
-                id: m.id,
-                senderId: m.sender_id,
-                receiverId: m.receiver_id,
-                roomId: m.room_id,
-                content: decryptMessage(m.content, vaultKey.value),
-                type: m.type,
-                fileName: m.file_name,
-                timestamp: m.created_at,
-                isMe: m.sender_id == auth.user?.id,
-                is_read: m.is_read,
-                reactions: m.reactions || [],
-                reply_to: m.reply_to || null,
-                reply_to_id: m.reply_to_id,
-                sender: m.sender
-            }))
+            const historical = msgs.map(m => {
+                let meta = m.link_metadata || null
+                if (typeof meta === 'string' && meta.trim()) {
+                    try { meta = JSON.parse(meta) } catch (e) {}
+                }
+                if (meta && Object.keys(meta).length === 0) meta = null
+
+                return {
+                    id: m.id,
+                    senderId: m.sender_id,
+                    receiverId: m.receiver_id,
+                    roomId: m.room_id,
+                    content: decryptMessage(m.content, vaultKey.value),
+                    type: m.type,
+                    fileName: m.file_name,
+                    timestamp: m.created_at,
+                    isMe: m.sender_id == auth.user?.id,
+                    is_read: m.is_read,
+                    is_forwarded: m.is_forwarded,
+                    link_metadata: meta,
+                    reactions: m.reactions || [],
+                    reply_to: m.reply_to || null,
+                    reply_to_id: m.reply_to_id,
+                    sender: m.sender
+                }
+            })
 
             messages.value = historical
             
@@ -503,6 +534,55 @@ export const useChatStore = defineStore('chat', () => {
             console.error('Failed to fetch history', err)
         } finally {
             loadingMessages.value = false
+        }
+    }
+
+    async function loadMoreHistory() {
+        if (!hasMoreHistory.value || isLoadingMore.value) return;
+        const targetId = activeRoomId.value || activeUserId.value;
+        if (!targetId) return;
+
+        isLoadingMore.value = true;
+        const isRoom = !!activeRoomId.value;
+        const config = useRuntimeConfig();
+
+        try {
+            historyPage.value += 1;
+            const data = await $fetch(`${config.public.apiBase}/messages/${targetId}?is_room=${isRoom}&limit=50&page=${historyPage.value}`, {
+                headers: { Authorization: `Bearer ${auth.token}` }
+            });
+
+            if (data.pagination) {
+                hasMoreHistory.value = data.pagination.current_page < data.pagination.last_page;
+            }
+
+            const msgs = data.messages || [];
+            const olderHistory = msgs.map(m => ({
+                id: m.id,
+                senderId: m.sender_id,
+                receiverId: m.receiver_id,
+                roomId: m.room_id,
+                content: decryptMessage(m.content, vaultKey.value),
+                type: m.type,
+                fileName: m.file_name,
+                timestamp: m.created_at,
+                isMe: m.sender_id == auth.user?.id,
+                is_read: m.is_read,
+                is_forwarded: m.is_forwarded,
+                link_metadata: m.link_metadata || null,
+                reactions: m.reactions || [],
+                reply_to: m.reply_to || null,
+                reply_to_id: m.reply_to_id,
+                sender: m.sender
+            }));
+
+            // Prepend older messages
+            messages.value = [...olderHistory, ...messages.value];
+        } catch (err) {
+            console.error('Failed to load more history', err);
+            historyPage.value -= 1; // Revert on failure
+        } finally {
+            isLoadingMore.value = false;
         }
     }
 
@@ -579,6 +659,18 @@ export const useChatStore = defineStore('chat', () => {
         } catch (err) {
             console.error('Failed to edit message', err)
             throw err
+        }
+    }
+
+    async function fetchLinkMetadata(url) {
+        const config = useRuntimeConfig()
+        try {
+            return await $fetch(`${config.public.apiBase}/messages/link-metadata?url=${encodeURIComponent(url)}`, {
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+        } catch (err) {
+            console.error('Failed to fetch link metadata', err)
+            return null
         }
     }
 
@@ -767,6 +859,8 @@ export const useChatStore = defineStore('chat', () => {
         activeRoomId,
         loading: loadingMessages, // Renamed for consistency
         loadingMessages, // Kept for backward compatibility if needed
+        hasMoreHistory,
+        isLoadingMore,
         typingUsers,
         presence,
         unreadCounts,
@@ -786,6 +880,8 @@ export const useChatStore = defineStore('chat', () => {
         sendMessage,
         sendTyping,
         fetchHistory,
+        loadMoreHistory,
+        fetchLinkMetadata,
         toggleReaction,
         togglePin,
         deleteMessage,

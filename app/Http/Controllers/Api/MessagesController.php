@@ -105,6 +105,11 @@ class MessagesController extends Controller
             }
         }
 
+        // Log incoming metadata for debugging
+        if ($request->has('link_metadata')) {
+            \Log::info('[CHAT] Incoming link metadata:', ['data' => $request->link_metadata]);
+        }
+
         $message = Message::create([
             'sender_id' => $senderId,
             'receiver_id' => $receiverId,
@@ -114,6 +119,7 @@ class MessagesController extends Controller
             'file_name' => $request->file_name,
             'reply_to_id' => $request->reply_to_id,
             'is_forwarded' => $request->is_forwarded ?? false,
+            'link_metadata' => $request->link_metadata,
         ]);
 
         $message->load(['replyTo', 'sender']);
@@ -137,6 +143,129 @@ class MessagesController extends Controller
         }
 
         return response()->json($message, 201);
+    }
+
+    public function getLinkMetadata(Request $request)
+    {
+        $url = $request->query('url');
+        if (!$url || !filter_var($url, FILTER_VALIDATE_URL)) {
+            return response()->json(['url' => $url, 'success' => false, 'error' => 'Invalid URL'], 422);
+        }
+
+        try {
+            $html = $this->fetchHtmlWithCurl($url);
+            if (!$html) {
+                return response()->json(['url' => $url, 'success' => false, 'error' => 'Could not fetch content']);
+            }
+
+            libxml_use_internal_errors(true);
+            $doc = new \DOMDocument();
+            // Suppress errors and handle encoding
+            @$doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+            libxml_clear_errors();
+
+            $xpath = new \DOMXPath($doc);
+
+            $metadata = [
+                'url' => $url,
+                'title' => '',
+                'description' => '',
+                'image' => '',
+                'success' => true
+            ];
+
+            // Title detection - use string() to get text value directly
+            $titleQueries = [
+                'string(//meta[@property="og:title"]/@content)',
+                'string(//meta[@name="og:title"]/@content)',
+                'string(//meta[@name="twitter:title"]/@content)',
+                'string(//meta[@name="title"]/@content)',
+                'string(//title)'
+            ];
+            foreach ($titleQueries as $query) {
+                $val = trim($xpath->evaluate($query));
+                if ($val) {
+                    $metadata['title'] = html_entity_decode($val);
+                    break;
+                }
+            }
+
+            // Description detection
+            $descQueries = [
+                'string(//meta[@property="og:description"]/@content)',
+                'string(//meta[@name="og:description"]/@content)',
+                'string(//meta[@name="twitter:description"]/@content)',
+                'string(//meta[@name="description"]/@content)'
+            ];
+            foreach ($descQueries as $query) {
+                $val = trim($xpath->evaluate($query));
+                if ($val) {
+                    $metadata['description'] = html_entity_decode($val);
+                    break;
+                }
+            }
+
+            // Image detection
+            $imageQueries = [
+                'string(//meta[@property="og:image"]/@content)',
+                'string(//meta[@property="og:image:url"]/@content)',
+                'string(//meta[@name="twitter:image"]/@content)',
+                'string(//meta[@name="image"]/@content)',
+                'string(//img[1]/@src)' // Extra fallback
+            ];
+            foreach ($imageQueries as $query) {
+                $val = trim($xpath->evaluate($query));
+                if ($val) {
+                    $metadata['image'] = $val;
+                    break;
+                }
+            }
+
+            // Absolute URL for image
+            if ($metadata['image']) {
+                if (!filter_var($metadata['image'], FILTER_VALIDATE_URL)) {
+                    $parsedUrl = parse_url($url);
+                    $baseUrl = ($parsedUrl['scheme'] ?? 'http') . '://' . ($parsedUrl['host'] ?? '');
+                    
+                    if (strpos($metadata['image'], '//') === 0) {
+                        $metadata['image'] = ($parsedUrl['scheme'] ?? 'http') . ':' . $metadata['image'];
+                    } elseif (strpos($metadata['image'], '/') === 0) {
+                        $metadata['image'] = $baseUrl . $metadata['image'];
+                    } else {
+                        $path = isset($parsedUrl['path']) ? dirname($parsedUrl['path']) : '';
+                        $metadata['image'] = $baseUrl . ($path === '/' ? '' : $path) . '/' . $metadata['image'];
+                    }
+                }
+            }
+
+            // Final sanity check
+            if (empty($metadata['title']) && empty($metadata['image']) && empty($metadata['description'])) {
+                $metadata['success'] = false;
+            }
+
+            return response()->json($metadata);
+        } catch (\Exception $e) {
+            return response()->json(['url' => $url, 'success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function fetchHtmlWithCurl($url)
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // For local dev environments
+        curl_setopt($ch, CURLOPT_ENCODING, ''); // Handle compressed responses
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return ($httpCode === 200) ? $response : false;
     }
 
     public function markAsRead(Request $request, $id)

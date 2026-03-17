@@ -279,14 +279,22 @@
           </transition>
 
           <!-- Messages -->
-          <div class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-light scroll-smooth" ref="messageContainer">
+          <div 
+             class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-light scroll-smooth" 
+             ref="messageContainer" 
+             @scroll="handleScroll"
+          >
             <!-- Loading State -->
-            <div v-if="chat.loadingMessages" class="d-flex flex-column align-items-center justify-content-center h-100 opacity-50">
+            <div v-if="chat.loadingMessages && chat.messages.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 opacity-50">
               <BSpinner variant="primary" label="Loading messages..." />
               <p class="mt-2 small">Loading your conversation...</p>
             </div>
 
             <template v-else>
+              <div v-if="chat.isLoadingMore" class="text-center py-2">
+                 <BSpinner small variant="primary" />
+              </div>
+
               <!-- Empty State: No Messages -->
               <div v-if="filteredMessages.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 py-5 text-center">
                 <div class="bg-white rounded-circle shadow-sm p-4 mb-4" style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
@@ -371,7 +379,24 @@
                                 </BButton>
                             </div>
                         </div>
-                        <div v-else class="message-text">{{ msg.content }}</div>
+                        <template v-else>
+                          <!-- Link Preview -->
+                          <div v-if="msg.link_metadata && (msg.link_metadata.title || msg.link_metadata.image || msg.link_metadata.description)" class="link-preview mb-2 rounded-3 overflow-hidden border bg-white text-dark" style="max-width: 100%;">
+                            <a :href="msg.link_metadata.url" target="_blank" class="text-decoration-none d-block">
+                              <div v-if="msg.link_metadata.image" class="preview-image overflow-hidden bg-light d-flex align-items-center justify-content-center" style="min-height: 100px;">
+                                <img :src="msg.link_metadata.image" class="w-100" style="max-height: 200px; object-fit: cover;" @error="msg.link_metadata.image = null" />
+                              </div>
+                              <div class="p-2">
+                                <div v-if="msg.link_metadata.title" class="fw-bold extra-small text-truncate mb-1">{{ msg.link_metadata.title }}</div>
+                                <div v-if="msg.link_metadata.description" class="text-muted extra-small text-truncate-2 mb-1" style="font-size: 0.65rem;">{{ msg.link_metadata.description }}</div>
+                                <div class="text-primary text-truncate opacity-75 mt-0 d-flex align-items-center gap-1" style="font-size: 0.6rem;">
+                                  <span>🔗</span> {{ msg.link_metadata.url }}
+                                </div>
+                              </div>
+                            </a>
+                          </div>
+                          <div class="message-text" :class="{ 'link-only': msg.content === msg.link_metadata?.url }">{{ msg.content }}</div>
+                        </template>
                     </div>
                     <div v-else-if="msg.type === 'call'" class="message-call d-flex align-items-center gap-2 py-1" :class="{ 'text-danger fw-bold': msg.content.includes('Missed') || msg.content.includes('Rejected') }">
                       <span class="fs-5">{{ msg.content.includes('Video') ? '📹' : '📞' }}</span>
@@ -442,6 +467,23 @@
                   <small class="text-muted text-truncate d-block">{{ chat.replyTo.content }}</small>
                 </div>
                 <BButton variant="link" size="sm" class="text-decoration-none text-danger p-0 px-2" @click="chat.replyTo = null">✕</BButton>
+              </div>
+
+              <!-- Input Link Preview -->
+              <div v-if="inputLinkPreview" class="mx-0 mb-2 p-2 rounded-3 bg-white border d-flex gap-3 align-items-center position-relative shadow-sm overflow-hidden">
+                  <div v-if="inputLinkPreview.loading" class="d-flex align-items-center justify-content-center bg-light rounded" style="width: 60px; height: 60px;">
+                      <BSpinner small variant="primary" />
+                  </div>
+                  <div v-else-if="inputLinkPreview.image" class="rounded overflow-hidden flex-shrink-0" style="width: 60px; height: 60px;">
+                      <img :src="inputLinkPreview.image" class="w-100 h-100" style="object-fit: cover;" @error="inputLinkPreview.image = null" />
+                  </div>
+                  <div class="flex-grow-1 overflow-hidden">
+                      <div class="fw-bold small text-truncate mb-0">
+                        {{ inputLinkPreview.loading ? 'Fetching link preview...' : (inputLinkPreview.title || 'Link Preview') }}
+                      </div>
+                      <div class="text-muted extra-small text-truncate mb-0">{{ inputLinkPreview.url }}</div>
+                  </div>
+                  <BButton variant="light" size="sm" class="rounded-circle p-1 ms-2" @click="inputLinkPreview = null">✕</BButton>
               </div>
 
               <BForm v-if="!blockStatus.is_blocked" @submit.prevent="handleSend" class="d-flex gap-2 align-items-center position-relative">
@@ -1053,6 +1095,9 @@ const newMessage = ref('')
 const userSearch = ref('')
 const messageSearch = ref('')
 const showSearchMessages = ref(false)
+const inputLinkPreview = ref(null)
+const linkDetectionTimeout = ref(null)
+const currentRequestId = ref(0) // To prevent race conditions
 
 // Forward State
 const showForwardModal = ref(false)
@@ -1603,6 +1648,20 @@ watch([() => chat.activeUserId, () => chat.activeRoomId], async ([newUserId, new
     }
 })
 
+// Scroll handler for infinite loading
+async function handleScroll(e) {
+    if (e.target.scrollTop === 0 && chat.hasMoreHistory && !chat.isLoadingMore) {
+        // Save current scroll height to adjust after loading older messages
+        const prevHeight = e.target.scrollHeight
+        await chat.loadMoreHistory()
+        
+        nextTick(() => {
+            const newHeight = e.target.scrollHeight
+            e.target.scrollTop = newHeight - prevHeight
+        })
+    }
+}
+
 // Use store-managed users
 const onlineUsers = computed(() => {
     return chat.users.filter(u => {
@@ -1785,20 +1844,81 @@ async function handleSend() {
     
     try {
         const replyToId = chat.replyTo?.id
+        const content = newMessage.value // local copy
+        let linkMetadata = null
+        if (inputLinkPreview.value && !inputLinkPreview.value.loading && inputLinkPreview.value.success !== false) {
+            // Clone and strip flags
+            linkMetadata = { ...inputLinkPreview.value }
+            delete linkMetadata.loading
+            delete linkMetadata.success
+        }
+        
+        newMessage.value = '' // Clear early for better UX
+        inputLinkPreview.value = null // Reset preview
+        if (linkDetectionTimeout.value) clearTimeout(linkDetectionTimeout.value)
+
         await chat.sendMessage(
             chat.activeRoomId ? null : chat.activeUserId, 
-            newMessage.value, 
+            content, 
             'text', 
             null, 
             replyToId, 
-            chat.activeRoomId
+            chat.activeRoomId,
+            false, // isForwarded
+            linkMetadata
         )
-        newMessage.value = ''
         scrollToBottom()
     } catch (err) {
         console.error('Failed to send', err)
     }
 }
+
+// Watch for links in input
+watch(newMessage, (val) => {
+    if (linkDetectionTimeout.value) clearTimeout(linkDetectionTimeout.value)
+    
+    if (!val || val.length < 5) {
+        inputLinkPreview.value = null
+        return
+    }
+
+    linkDetectionTimeout.value = setTimeout(async () => {
+        const urlRegex = /(https?:\/\/[^\s]+)/i
+        const match = val.match(urlRegex)
+        
+        if (match) {
+            const url = match[0]
+            if (inputLinkPreview.value?.url === url && !inputLinkPreview.value.loading) return
+            
+            const reqId = ++currentRequestId.value
+            inputLinkPreview.value = { url, loading: true }
+
+            // Safety timeout: if it takes > 10s, clear it
+            const safetyTimeout = setTimeout(() => {
+                if (currentRequestId.value === reqId && inputLinkPreview.value?.loading) {
+                    inputLinkPreview.value = null
+                }
+            }, 10000)
+
+            try {
+                const data = await chat.fetchLinkMetadata(url)
+                clearTimeout(safetyTimeout)
+
+                if (currentRequestId.value === reqId) {
+                    if (data && data.success !== false) {
+                        inputLinkPreview.value = { ...data, loading: false }
+                    } else {
+                        inputLinkPreview.value = null
+                    }
+                }
+            } catch (e) {
+                if (currentRequestId.value === reqId) inputLinkPreview.value = null
+            }
+        } else {
+            inputLinkPreview.value = null
+        }
+    }, 800)
+})
 
 function scrollToMessage(messageId) {
     if (!messageId) return
@@ -2078,8 +2198,30 @@ watch(filteredMessages, () => {
 }
 
 @keyframes typing {
-  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-  40% { transform: scale(1.0); opacity: 1; }
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+.extra-small {
+    font-size: 0.75rem;
+}
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.link-preview {
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.link-preview:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
 .highlight-pulse {
@@ -2183,5 +2325,41 @@ watch(filteredMessages, () => {
 .slide-fade-leave-to {
   transform: translateY(-20px);
   opacity: 0;
+}
+
+/* Link Preview Styles */
+.link-preview {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    background: #fff;
+}
+
+.link-preview:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+.extra-small {
+    font-size: 0.75rem;
+}
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.message-text.link-only {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    word-break: break-all;
+}
+
+.preview-image img {
+    background-color: #f1f5f9;
 }
 </style>

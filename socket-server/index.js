@@ -140,7 +140,7 @@ io.on('connection', (socket) => {
     io.emit('presence.update', { userId, status: 'online' });
 
     // --- Private Messaging ---
-    socket.on('chat.private.send', async ({ receiverId, content, type, fileName, replyToId, isForwarded }, callback) => {
+    socket.on('chat.private.send', async ({ receiverId, content, type, fileName, replyToId, isForwarded, linkMetadata }, callback) => {
         const parsedReceiverId = parseInt(receiverId);
         if (!parsedReceiverId || !content) {
             return callback({ status: 'error', message: 'Invalid private message payload' });
@@ -156,7 +156,8 @@ io.on('connection', (socket) => {
                 type: type || 'text',
                 file_name: fileName,
                 reply_to_id: replyToId || null,
-                is_forwarded: isForwarded || false
+                is_forwarded: isForwarded || false,
+                link_metadata: linkMetadata || null
             }, {
                 headers: { 'Authorization': token, 'Accept': 'application/json' }
             });
@@ -191,7 +192,7 @@ io.on('connection', (socket) => {
         io.to(`user.${receiverId}`).emit('chat.poke', { senderId: userId });
     });
 
-    socket.on('chat.group.send', async ({ roomId, content, type, fileName, replyToId, isForwarded }, callback) => {
+    socket.on('chat.group.send', async ({ roomId, content, type, fileName, replyToId, isForwarded, linkMetadata }, callback) => {
         const parsedRoomId = parseInt(roomId);
         if (!parsedRoomId || !content) {
             return callback({ status: 'error', message: 'Invalid group message payload' });
@@ -207,7 +208,8 @@ io.on('connection', (socket) => {
                 type: type || 'text',
                 file_name: fileName,
                 reply_to_id: replyToId || null,
-                is_forwarded: isForwarded || false
+                is_forwarded: isForwarded || false,
+                link_metadata: linkMetadata || null
             }, {
                 headers: { 'Authorization': token, 'Accept': 'application/json' }
             });

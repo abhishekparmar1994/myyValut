@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messages/pin/{messageId}', [MessagesController::class , 'togglePin']);
     Route::put('/messages/{messageId}', [MessagesController::class , 'editMessage']);
     Route::delete('/messages/{messageId}', [MessagesController::class , 'deleteMessage']);
+    Route::get('/messages/link-metadata', [MessagesController::class , 'getLinkMetadata']);
     Route::post('/logout', [AuthController::class , 'logout']);
 
     // Profile

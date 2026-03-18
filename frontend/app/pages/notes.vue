@@ -9,25 +9,30 @@
         </div>
       </BCol>
       <BCol md="5" class="text-md-end d-flex gap-2 justify-content-md-end">
-        <BButton variant="outline-primary" @click="openModal('note')" class="fw-semibold flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center gap-2">
-          <FileEditIcon :size="16" /> Note
+        <BButton variant="outline-primary" @click="openModal('note')" class="fw-bold px-4 d-flex align-items-center justify-content-center gap-2 shadow-sm">
+          <FileEditIcon :size="18" /> Note
         </BButton>
-        <BButton variant="primary" @click="openModal('todo')" class="fw-semibold flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center gap-2">
-          <CheckIcon :size="16" /> To-Do
+        <BButton variant="primary" @click="openModal('todo')" class="fw-bold px-4 d-flex align-items-center justify-content-center gap-2 shadow-sm border-0">
+          <CheckIcon :size="18" /> To-Do
         </BButton>
       </BCol>
     </BRow>
 
     <!-- Filter Tabs -->
-    <BNav pills class="mb-4 gap-2">
-      <BNavItem :active="filter === 'all'"  @click="filter = 'all'">All</BNavItem>
-      <BNavItem :active="filter === 'note'" @click="filter = 'note'" class="d-flex align-items-center gap-1">
-        <FileEditIcon :size="14" /> Notes
-      </BNavItem>
-      <BNavItem :active="filter === 'todo'" @click="filter = 'todo'" class="d-flex align-items-center gap-1">
-        <CheckIcon :size="14" /> To-Dos
-      </BNavItem>
-    </BNav>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <BButton :variant="filter === 'all' ? 'primary' : 'outline-primary'" @click="filter = 'all'" 
+        class="fw-bold px-4" size="sm">
+        All
+      </BButton>
+      <BButton :variant="filter === 'note' ? 'primary' : 'outline-primary'" @click="filter = 'note'" 
+        class="fw-bold px-4 d-flex align-items-center gap-2" size="sm">
+        <FileEditIcon :size="16" /> Notes
+      </BButton>
+      <BButton :variant="filter === 'todo' ? 'primary' : 'outline-primary'" @click="filter = 'todo'" 
+        class="fw-bold px-4 d-flex align-items-center gap-2" size="sm">
+        <CheckIcon :size="16" /> To-Dos
+      </BButton>
+    </div>
 
     <div v-if="loading" class="text-center py-5"><BSpinner variant="primary" /></div>
 

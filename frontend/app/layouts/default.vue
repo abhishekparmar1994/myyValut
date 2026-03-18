@@ -155,7 +155,7 @@ onMounted(() => {
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
   .hover-primary:hover { color: var(--bs-primary) !important; text-decoration: none !important; }
   .transition-all { transition: all 0.2s ease-in-out; }
-  .nav-link { color: #64748b !important; display: flex; align-items: center; }
+  .nav-link { color: #64748b; display: flex; align-items: center; }
   .nav-link:hover { color: var(--bs-primary) !important; }
   .navbar-nav .nav-link { padding-top: 0 !important; padding-bottom: 0 !important; height: 100%; }
   .dropdown-toggle::after { vertical-align: middle !important; margin-left: 0.35rem !important; }

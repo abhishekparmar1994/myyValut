@@ -1,9 +1,9 @@
 <template>
   <BContainer class="py-5">
     <!-- Header Section -->
-    <BRow class="mb-5 align-items-center">
+    <BRow class="mb-5 align-items-center animate-fadeIn">
       <BCol>
-        <h1 class="fw-black text-dark mb-1">
+        <h1 class="fw-black text-main mb-1">
           Welcome back, <span class="text-primary">{{ auth.user?.name }}</span>
         </h1>
         <p class="text-muted lead">Your personal dashboard — documents, reminders, and more.</p>
@@ -116,13 +116,13 @@
           </div>
 
           <BListGroup v-else flush>
-            <BListGroupItem v-for="activity in activities" :key="activity.id" class="py-3 px-0 border-light">
+            <BListGroupItem v-for="activity in activities" :key="activity.id" class="py-3 px-0 border-light bg-transparent">
               <div class="d-flex align-items-center">
-                <div class="p-3 rounded-circle bg-light me-3 fs-5 lh-1">
+                <div class="p-3 rounded-circle bg-surface-secondary me-3 fs-5 lh-1 border">
                   {{ activity.icon }}
                 </div>
                 <div class="flex-grow-1">
-                  <h4 class="h6 fw-bold mb-1">{{ activity.description }}</h4>
+                  <h4 class="h6 fw-bold mb-1 text-main">{{ activity.description }}</h4>
                   <p class="text-muted small mb-0">{{ activity.created_at }}</p>
                 </div>
               </div>
@@ -324,19 +324,17 @@ onMounted(() => {
 
 /* Urgent blinking for reminders due today */
 .urgent-reminder {
-  background-color: #fff3f3;
-  border-color: #dc3545 !important;
+  background-color: rgba(var(--danger-rgb, 220, 53, 69), 0.1) !important;
+  border-color: var(--danger) !important;
   animation: urgent-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes urgent-pulse {
   0%, 100% {
-    background-color: #fff3f3;
-    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    box-shadow: 0 0 0 0 rgba(var(--danger-rgb, 220, 53, 69), 0.4);
   }
   50% {
-    background-color: #ffe0e0;
-    box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+    box-shadow: 0 0 0 6px rgba(var(--danger-rgb, 220, 53, 69), 0);
   }
 }
 </style>

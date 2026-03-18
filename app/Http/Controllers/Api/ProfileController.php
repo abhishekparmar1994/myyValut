@@ -28,6 +28,7 @@ class ProfileController extends Controller
             'date_of_birth' => 'nullable|date',
             'address'       => 'nullable|string|max:500',
             'city'          => 'nullable|string|max:100',
+            'theme'         => 'nullable|string|in:light,dark,vibrant,glass,ocean,forest,midnight,chatvibe',
         ]);
 
         $user->update($validated);
@@ -99,6 +100,7 @@ class ProfileController extends Controller
             'profile_image_url' => $user->profile_image
                 ? asset('storage/' . $user->profile_image)
                 : null,
+            'theme'             => $user->theme ?? 'light',
         ];
     }
 }

@@ -1,9 +1,12 @@
 <template>
   <BContainer class="py-5">
-    <BRow class="mb-4">
-      <BCol>
-        <h1 class="fw-bold mb-0">👤 My Profile</h1>
-        <p class="text-muted mb-0">Manage your personal information and account settings</p>
+    <BRow class="mb-5 animate-fadeIn">
+      <BCol class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-primary rounded-4 shadow-sm text-white fs-2">👤</div>
+        <div>
+          <h1 class="fw-black mb-1 text-main">My Profile</h1>
+          <p class="text-muted mb-0">Manage your personal information and account settings</p>
+        </div>
       </BCol>
     </BRow>
 
@@ -112,6 +115,22 @@
                 </BFormGroup>
               </BCol>
             </BRow>
+
+            <BFormGroup label="🎨 Application Theme" class="mb-4 fw-bold text-main">
+              <div class="row g-3 mt-1">
+                <div v-for="t in themeOptions" :key="t.id" class="col-6 col-md-3 col-lg-2">
+                  <div 
+                    class="theme-card p-3 rounded-4 border text-center cursor-pointer transition-all h-100 d-flex flex-column align-items-center justify-content-center"
+                    :class="{ 'active-theme shadow-lg': form.theme === t.id }"
+                    @click="updateThemePreview(t.id)"
+                  >
+                    <div class="theme-bubble mb-2 border shadow-sm" :style="`background: ${t.color};` "></div>
+                    <div class="small fw-black">{{ t.name }}</div>
+                  </div>
+                </div>
+              </div>
+            </BFormGroup>
+
             <BButton type="submit" variant="primary" :disabled="savingProfile" class="fw-bold px-4">
               <BSpinner v-if="savingProfile" small class="me-2" /> Save Changes
             </BButton>
@@ -173,7 +192,33 @@ const profile = ref({})
 const loading  = ref(true)
 
 // Profile form
-const form          = reactive({ name: '', phone: '', date_of_birth: '', address: '', city: '' })
+const form          = reactive({ name: '', phone: '', date_of_birth: '', address: '', city: '', theme: 'light' })
+const themeOptions = [
+  { id: 'light', name: 'Light', color: '#0d6efd' },
+  { id: 'dark', name: 'Dark', color: '#1e293b' },
+  { id: 'vibrant', name: 'Vibrant', color: '#e11d48' },
+  { id: 'glass', name: 'Glass', color: 'rgba(255,255,255,0.5)' },
+  { id: 'ocean', name: 'Ocean', color: '#0284c7' },
+  { id: 'forest', name: 'Forest', color: '#15803d' },
+  { id: 'midnight', name: 'Midnight', color: '#6366f1' },
+  { id: 'chatvibe', name: 'ChatVibe', color: '#3b71ed' },
+]
+
+function updateThemePreview(themeId) {
+  form.theme = themeId
+  applyThemeGlobally(themeId)
+}
+
+function applyThemeGlobally(themeId) {
+  if (!process.client) return
+  const body = document.body
+  // Remove all theme classes
+  themeOptions.forEach(t => body.classList.remove(`theme-${t.id}`))
+  // Add new theme class
+  if (themeId && themeId !== 'light') {
+    body.classList.add(`theme-${themeId}`)
+  }
+}
 const savingProfile = ref(false)
 const profileSuccess = ref(''), profileError = ref('')
 
@@ -201,6 +246,8 @@ async function fetchProfile() {
     form.date_of_birth = data.date_of_birth || ''
     form.address       = data.address || ''
     form.city          = data.city || ''
+    form.theme         = data.theme || 'light'
+    applyThemeGlobally(form.theme)
   } catch (e) { console.error(e) } finally { loading.value = false }
 }
 
@@ -212,8 +259,8 @@ async function saveProfile() {
       method: 'PUT', body: { ...form }, headers: headers.value
     })
     profile.value = res.user
-    // Update name in auth store
-    if (auth.user) auth.user.name = res.user.name
+    // Sync with auth store
+    auth.setUser(res.user)
     showToast({ title: 'Success', body: 'Profile updated successfully!', variant: 'success' })
   } catch (e) {
     showToast({ title: 'Error', body: e.data?.message || 'Update failed.', variant: 'danger' })

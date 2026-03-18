@@ -4,10 +4,10 @@
     <div v-if="chat.isShaking" class="poke-overlay">
        <div class="poke-text">ATTENTION!</div>
     </div>
-    <BRow class="chat-wrapper shadow-lg rounded-4 overflow-hidden border bg-white m-0">
+    <BRow class="chat-wrapper rounded-4 overflow-hidden border bg-white m-0" style="box-shadow: var(--shadow-xl); min-height: 85vh;">
       <!-- Users List -->
-      <BCol :md="4" :lg="3" class="bg-white border-end d-flex flex-column h-100" :class="{ 'd-none d-md-flex': chat.activeUserId || chat.activeRoomId }">
-        <div class="p-4 border-bottom bg-light">
+      <BCol :md="4" :lg="3" class="bg-surface border-end d-flex flex-column h-100" :class="{ 'd-none d-md-flex': chat.activeUserId || chat.activeRoomId }">
+        <div class="p-4 border-bottom bg-surface-secondary">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <div class="d-flex align-items-center gap-2">
               <h4 class="fw-bold mb-0 text-primary">Messages</h4>
@@ -17,9 +17,10 @@
                 class="rounded-circle p-1 border-0 shadow-sm"
                 :class="{ 'bg-success-subtle text-success': chat.vaultKey, 'bg-warning-subtle text-warning': !chat.vaultKey }"
                 @click="showVaultModal = true"
-                title="End-to-End Encryption Vault"
+                v-b-tooltip.hover.bottom="chat.vaultKey ? 'Encryption Enabled' : 'Enable Encryption'"
               >
-                <span>{{ chat.vaultKey ? '🔒' : '🔓' }}</span>
+                <LockIcon v-if="chat.vaultKey" size="14" />
+                <UnlockIcon v-else size="14" />
               </BButton>
             </div>
             <div class="status-indicator">
@@ -37,25 +38,35 @@
           </div>
         </div>
         <div class="px-2 pt-3 mb-2">
-          <div class="d-flex mb-2 gap-1 bg-light p-1 rounded-pill border">
+          <div class="d-flex mb-2 gap-0 bg-surface-secondary p-1 rounded-pill border chat-sidebar-tabs" :style="auth.theme === 'chatvibe' ? 'background: transparent !important; border: none !important; border-bottom: 1px solid var(--border-color) !important; border-radius: 0 !important;' : ''">
             <button 
-              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all" 
-              :class="sidebarMode === 'users' ? 'bg-primary text-white shadow-sm' : 'text-muted'"
+              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all position-relative" 
+              :class="{ 'bg-primary text-white shadow-sm active': sidebarMode === 'users', 'text-muted': sidebarMode !== 'users' }"
               @click="sidebarMode = 'users'"
             >
-                Chats
-                <BBadge v-if="chat.totalChatsUnread > 0" variant="danger" pill class="ms-1 shadow-sm" style="font-size: 0.7rem;">
+                All
+                <BBadge v-if="chat.totalChatsUnread > 0" variant="danger" pill class="ms-1 px-1" style="font-size: 0.65rem;">
                   {{ chat.totalChatsUnread }}
                 </BBadge>
               </button>
             <button 
-              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all" 
-              :class="sidebarMode === 'groups' ? 'bg-primary text-white shadow-sm' : 'text-muted'"
+              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all position-relative" 
+              :class="{ 'bg-primary text-white shadow-sm active': sidebarMode === 'groups', 'text-muted': sidebarMode !== 'groups' }"
               @click="sidebarMode = 'groups'"
             >
                 Groups
-                <BBadge v-if="chat.totalGroupsUnread > 0" variant="danger" pill class="ms-1 shadow-sm" style="font-size: 0.7rem;">
+                <BBadge v-if="chat.totalGroupsUnread > 0" variant="danger" pill class="ms-1 px-1" style="font-size: 0.65rem;">
                   {{ chat.totalGroupsUnread }}
+                </BBadge>
+              </button>
+            <button 
+              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all position-relative" 
+              :class="{ 'bg-primary text-white shadow-sm active': sidebarMode === 'unread', 'text-muted': sidebarMode !== 'unread' }"
+              @click="sidebarMode = 'unread'"
+            >
+                Unread
+                <BBadge v-if="(chat.totalChatsUnread + chat.totalGroupsUnread) > 0" variant="danger" pill class="ms-1 px-1" style="font-size: 0.65rem;">
+                  {{ chat.totalChatsUnread + chat.totalGroupsUnread }}
                 </BBadge>
               </button>
           </div>
@@ -83,17 +94,18 @@
                 <BAvatar v-else variant="info" :text="user.name.charAt(0)" />
                 <span class="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle p-1" style="width: 12px; height: 12px;"></span>
               </div>
-              <div class="flex-grow-1 overflow-hidden">
+              <div class="flex-grow-1 overflow-hidden d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <h6 class="mb-0 fw-bold text-truncate me-2 text-main">{{ user.name }}</h6>
+                  <small class="text-muted flex-shrink-0 xx-small">{{ formatTime(user.last_message_time) }}</small>
+                </div>
                 <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
-                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+                  <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
+                  <small v-else class="text-muted text-truncate d-block">{{ getLastMessagePreview(user) }}</small>
+                  
+                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill class="ms-2 flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
                     {{ chat.unreadCounts['user_' + user.id] }}
                   </BBadge>
-                </div>
-                <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
-                <div v-else class="d-flex justify-content-between align-items-center">
-                  <small class="text-muted text-truncate d-block flex-grow-1">{{ getLastMessagePreview(user) }}</small>
-                  <small class="text-muted flex-shrink-0" style="font-size: 0.65rem;">{{ formatTime(user.last_message_time) }}</small>
                 </div>
               </div>
             </div>
@@ -115,16 +127,16 @@
                 variant="secondary" 
               />
               <BAvatar v-else variant="secondary" :text="user.name.charAt(0)" />
-              <div class="flex-grow-1 overflow-hidden">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="mb-0 fw-bold">{{ user.name }}</h6>
-                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
-                    {{ chat.unreadCounts['user_' + user.id] }}
-                  </BBadge>
+              <div class="flex-grow-1 overflow-hidden d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <h6 class="mb-0 fw-bold text-truncate me-2 text-main">{{ user.name }}</h6>
+                  <small class="text-muted flex-shrink-0 xx-small">{{ formatTime(user.last_message_time) }}</small>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
-                  <small class="text-muted text-truncate d-block flex-grow-1">{{ getLastMessagePreview(user) }}</small>
-                  <small class="text-muted flex-shrink-0" style="font-size: 0.65rem;">{{ formatTime(user.last_message_time) }}</small>
+                  <small class="text-muted text-truncate d-block">{{ getLastMessagePreview(user) }}</small>
+                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill class="ms-2 flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
+                    {{ chat.unreadCounts['user_' + user.id] }}
+                  </BBadge>
                 </div>
               </div>
             </div>
@@ -135,21 +147,21 @@
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="sidebarMode === 'groups'">
           <!-- Groups List -->
           <div v-if="filteredRooms.length > 0">
             <div 
               v-for="room in filteredRooms" 
               :key="room.id" 
               class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all"
-              :class="{ 'bg-primary-subtle border-primary': chat.activeRoomId === room.id }"
+              :class="{ 'active bg-primary-subtle border-primary': chat.activeRoomId === room.id }"
               @click="selectRoom(room)"
             >
               <BAvatar :text="room.name.charAt(0)" variant="info" />
-              <div class="flex-grow-1 overflow-hidden">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="mb-0 fw-bold">{{ room.name }}</h6>
-                  <BBadge v-if="chat.unreadCounts['room_' + room.id] > 0" variant="danger" pill style="font-size: 0.7rem;">
+              <div class="flex-grow-1 overflow-hidden d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <h6 class="mb-0 fw-bold text-truncate me-2 text-main">{{ room.name }}</h6>
+                  <BBadge v-if="chat.unreadCounts['room_' + room.id] > 0" variant="danger" pill class="flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
                     {{ chat.unreadCounts['room_' + room.id] }}
                   </BBadge>
                 </div>
@@ -166,17 +178,45 @@
             </BButton>
           </div>
         </template>
+
+        <template v-else-if="sidebarMode === 'unread'">
+           <!-- Unread Filtered List -->
+           <div v-if="unreadList.length > 0">
+              <div 
+                v-for="item in unreadList" 
+                :key="item.id" 
+                class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all"
+                :class="{ 'active bg-primary-subtle border-primary': (item.isUser && activeUser?.id === item.id) || (!item.isUser && chat.activeRoomId === item.id) }"
+                @click="item.isUser ? selectUser(item) : selectRoom(item)"
+              >
+                <BAvatar v-if="item.isUser && item.profile_image" :src="getProfileImageUrl(item)" variant="info" />
+                <BAvatar v-else :text="item.name.charAt(0)" variant="info" />
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold">{{ item.name }}</h6>
+                    <BBadge variant="danger" pill style="font-size: 0.7rem;">
+                      {{ chat.unreadCounts[item.isUser ? 'user_' + item.id : 'room_' + item.id] }}
+                    </BBadge>
+                  </div>
+                  <small class="text-muted d-block text-truncate">{{ item.isUser ? getLastMessagePreview(item) : `${item.members.length} members` }}</small>
+                </div>
+              </div>
+           </div>
+           <div v-else class="text-center py-5 text-muted">
+              <small>No unread messages</small>
+           </div>
+        </template>
       </div>
     </BCol>
 
       <!-- Chat Area -->
-      <BCol :md="8" :lg="9" class="bg-white d-flex flex-column h-100" :class="{ 'd-none d-md-flex': !chat.activeUserId && !chat.activeRoomId }">
+      <BCol :md="8" :lg="9" class="bg-surface d-flex flex-column h-100" :class="{ 'd-none d-md-flex': !chat.activeUserId && !chat.activeRoomId }">
         <template v-if="chat.activeUserId || chat.activeRoomId">
-          <div class="p-4 border-bottom d-flex align-items-center justify-content-between bg-white px-3 px-md-4">
+          <div class="p-4 border-bottom d-flex align-items-center justify-content-between bg-surface px-3 px-md-4">
             <div class="d-flex align-items-center gap-2 gap-md-3 overflow-hidden">
               <!-- Back Button (Mobile Only) -->
               <BButton variant="light" size="sm" class="d-md-none rounded-circle p-2 me-1" @click="chat.activeUserId = null; chat.activeRoomId = null">
-                <span>🔙</span>
+                <ArrowLeftIcon size="18" />
               </BButton>
               <template v-if="chat.activeRoomId">
                 <BAvatar :text="activeRoom?.name?.charAt(0)" variant="info" />
@@ -208,25 +248,26 @@
                 class="rounded-circle p-2" 
                 :class="{ 'bg-primary text-white': showSearchMessages }"
                 @click="showSearchMessages = !showSearchMessages; if(!showSearchMessages) messageSearch = ''"
+                v-b-tooltip.hover.bottom="'Search in conversation'"
               >
-                <span>🔍</span>
+                <SearchIcon size="18" />
               </BButton>
 
               <template v-if="!chat.activeRoomId && activeUser">
-                <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')">
-                  <span>📞</span>
+                <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('audio')" v-b-tooltip.hover.bottom="'Audio Call'">
+                  <PhoneIcon size="18" />
                 </BButton>
-                <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('video')">
-                  <span>📹</span>
+                <BButton variant="light" size="sm" class="rounded-circle p-2" @click="initiateCall('video')" v-b-tooltip.hover.bottom="'Video Call'">
+                  <VideoIcon size="18" />
                 </BButton>
                 <!-- Poke Button -->
-                <BButton variant="warning" size="sm" class="rounded-circle p-2 shadow-sm" @click="chat.sendPoke(activeUser.id)" :disabled="chat.isShaking">
-                  <span title="Poke for attention">⚡</span>
+                <BButton variant="warning" size="sm" class="rounded-circle p-2 shadow-sm" @click="chat.sendPoke(activeUser.id)" :disabled="chat.isShaking" v-b-tooltip.hover.bottom="'Poke User'">
+                  <ZapIcon size="18" />
                 </BButton>
               </template>
               <BDropdown variant="light" size="sm" no-caret rounded="circle">
                 <template #button-content>
-                  <span class="fs-5">⋮</span>
+                  <MoreVerticalIcon size="18" />
                 </template>
                 <template v-if="!chat.activeRoomId && activeUser">
                   <BDropdownItem @click="handleToggleBlock">
@@ -249,7 +290,7 @@
           <!-- Pinned Message Bar -->
           <div v-if="chat.pinnedMessage" class="px-4 py-2 bg-primary-subtle border-bottom d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-2 overflow-hidden">
-               <span class="fs-5">📌</span>
+               <PinIcon size="18" class="text-primary me-2" />
                <div class="flex-grow-1 overflow-hidden">
                  <div class="small fw-bold text-primary mb-0">Pinned Message</div>
                  <div class="d-flex align-items-center gap-2">
@@ -280,7 +321,7 @@
 
           <!-- Messages -->
           <div 
-             class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-light scroll-smooth" 
+             class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-surface-secondary scroll-smooth" 
              ref="messageContainer" 
              @scroll="handleScroll"
           >
@@ -339,19 +380,46 @@
                     <div v-if="msg.roomId && String(msg.senderId) !== String(auth.user?.id)" class="small fw-bold mb-1" :style="{ color: getUserColor(msg.sender?.name) }">
                       {{ msg.sender?.name }}
                     </div>
-                    <div class="message-actions-overlay position-absolute top-0 end-0 p-1 message-action-trigger transition-all">
-                      <BDropdown variant="link" size="sm" no-caret toggle-class="p-0 text-muted-custom">
-                        <template #button-content><span class="fs-6 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">⋮</span></template>
-                         <BDropdownItem @click="chat.replyTo = msg">↩️ Reply</BDropdownItem>
-                         <BDropdownItem @click="openForwardModal(msg)">⏩ Forward</BDropdownItem>
-                         <BDropdownItem v-if="canEdit(msg)" @click="startEditing(msg)">✏️ Edit Message</BDropdownItem>
-                         <BDropdownItem @click="chat.togglePin(msg.id)">📌 Pin Message</BDropdownItem>
-                         <BDropdownItem v-if="!msg.is_deleted_everyone" @click="messageToDelete = msg; showDeleteModal = true" class="text-danger">🗑️ Delete Message</BDropdownItem>
-                        <BDropdownDivider />
-                        <div class="px-2 pb-1 d-flex justify-content-around gap-2">
-                          <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
-                        </div>
-                      </BDropdown>
+                    <!-- ChatVibe Style Message Actions -->
+                    <div class="message-actions-overlay position-absolute top-0 start-50 opacity-0 invisible transition-all shadow rounded-pill bg-white border p-1 d-flex gap-1 no-wrap" 
+                         style="z-index: 1000; transform: translateY(-110%) translateX(-50%); pointer-events: auto; white-space: nowrap; min-width: max-content;">
+                        <BButton variant="link" size="sm" class="p-1 px-2 text-muted hover-primary border-0 shadow-none" v-b-tooltip.hover.top="'Forward'" @click="openForwardModal(msg)">
+                          <ForwardIcon size="16" />
+                        </BButton>
+                        <BButton variant="link" size="sm" class="p-1 px-2 text-muted hover-primary border-0 shadow-none" v-b-tooltip.hover.top="'Reply'" @click="chat.replyTo = msg">
+                          <ReplyIcon size="16" />
+                        </BButton>
+                        <BButton variant="link" size="sm" class="p-1 px-2 text-muted hover-primary border-0 shadow-none" v-b-tooltip.hover.top="'Copy Content'" @click="copyToClipboard(msg.content)">
+                          <CopyIcon size="16" />
+                        </BButton>
+                        <BButton v-if="canEdit(msg)" variant="link" size="sm" class="p-1 px-2 text-muted hover-primary border-0 shadow-none" v-b-tooltip.hover.top="'Edit Message'" @click="startEditing(msg)">
+                          <EditIcon size="16" />
+                        </BButton>
+                        <BButton v-if="!msg.is_deleted_everyone" variant="link" size="sm" class="p-1 px-2 text-muted hover-danger border-0 shadow-none" v-b-tooltip.hover.top="'Delete'" @click="messageToDelete = msg; showDeleteModal = true">
+                          <TrashIcon size="16" />
+                        </BButton>
+                        
+                        <BDropdown variant="link" size="sm" no-caret toggle-class="p-1 px-2 text-muted hover-primary border-0 shadow-none">
+                          <template #button-content>
+                            <MoreVerticalIcon size="16" />
+                          </template>
+                          <BDropdownItem @click="chat.togglePin(msg.id)">
+                            <PinIcon size="14" class="me-2" /> {{ msg.is_pinned ? 'Unpin' : 'Pin' }}
+                          </BDropdownItem>
+                          <BDropdownItem @click="markAsUnread(msg)">
+                            <MailOpenIcon size="14" class="me-2" /> Mark As Unread
+                          </BDropdownItem>
+                          <BDropdownItem @click="archiveChat(msg)">
+                            <HistoryIcon size="14" class="me-2" /> Archive
+                          </BDropdownItem>
+                          <BDropdownItem @click="addToFavourites(msg)">
+                            <HeartIcon size="14" class="me-2" /> Add To Favourites
+                          </BDropdownItem>
+                          <BDropdownDivider />
+                          <div class="px-2 pb-1 d-flex justify-content-around gap-2">
+                             <span v-for="e in ['👍','❤️','😂','🔥']" :key="e" class="cursor-pointer action-btn p-1 rounded hover-bg" @click="chat.toggleReaction(msg.id, e)">{{ e }}</span>
+                          </div>
+                        </BDropdown>
                     </div>
 
                   <!-- Reply Preview inside message -->
@@ -423,10 +491,12 @@
                     <span v-if="msg.senderId === auth.user?.id" :class="msg.is_read ? 'text-info' : 'text-white-50'"> ✓✓</span>
                   </div>
 
-                  <!-- Reactions Display -->
-                  <div v-if="msg.reactions && msg.reactions.length" class="reactions-container mt-1 d-flex gap-1 flex-wrap">
-                    <span v-for="(emoji, group) in groupReactions(msg.reactions)" :key="group" class="badge rounded-pill bg-light text-dark border shadow-sm px-2 py-1" style="font-size: 0.7rem; cursor: pointer" @click="chat.toggleReaction(msg.id, group)">
-                      {{ group }} {{ emoji.count }}
+                  <!-- Reactions Display (ChatVibe Style) -->
+                  <div v-if="msg.reactions && msg.reactions.length" class="reactions-container position-absolute bottom-0 d-flex gap-1 flex-wrap shadow-sm" 
+                       :style="String(msg.senderId) === String(auth.user?.id) ? 'left: 0; transform: translateY(50%) translateX(-10%);' : 'right: 0; transform: translateY(50%) translateX(10%);'"
+                       style="z-index: 50;">
+                    <span v-for="(emoji, group) in groupReactions(msg.reactions)" :key="group" class="badge rounded-pill bg-white text-dark border px-2 py-1 pulse-subtle" style="font-size: 0.7rem; cursor: pointer" @click="chat.toggleReaction(msg.id, group)">
+                      {{ group }} <span v-if="emoji.count > 1" class="ms-1 fw-bold">{{ emoji.count }}</span>
                     </span>
                   </div>
                 </div>
@@ -509,7 +579,7 @@
                   ref="newMessageInput"
                   v-model="newMessage" 
                   placeholder="Type a message..." 
-                  class="flex-grow-1 rounded-pill border-0 bg-light px-4 py-2 shadow-none"
+                  class="flex-grow-1 rounded-pill border-0 bg-surface-secondary px-4 py-2 shadow-none"
                   @input="handleTyping"
                   @focus="showEmojiPicker = false"
                 />
@@ -570,18 +640,29 @@
   </BModal>
 
   <!-- Message Deletion Modal (WhatsApp Style) -->
-  <BModal v-model="showDeleteModal" title="Delete Message?" centered hide-footer header-bg-variant="light" header-text-variant="primary" body-class="p-4">
-    <div class="text-center mb-4">
-      <p class="text-muted">Are you sure you want to delete this message?</p>
+  <BModal 
+    v-model="showDeleteModal" 
+    title="Delete message?" 
+    centered 
+    :hide-footer="true" 
+    footer-class="d-none"
+    dialog-class="modal-zoom-in"
+    header-class="border-0 pb-0" 
+    body-class="p-4" 
+    size="sm"
+  >
+    <template #modal-footer></template>
+    <div class="mb-4">
+      <p class="text-muted small">Are you sure you want to delete this message?</p>
     </div>
-    <div class="d-grid gap-2">
-      <BButton variant="outline-danger" class="rounded-3 py-2 fw-bold" @click="confirmingDeleteMessage('me')">
-        🗑️ Delete for me
+    <div class="d-flex flex-column gap-2">
+      <BButton variant="outline-danger" class="rounded-3 py-2 fw-bold w-100 whatsapp-btn" @click="confirmingDeleteMessage('me')">
+        Delete for me
       </BButton>
-      <BButton v-if="messageToDelete?.senderId === auth.user?.id" variant="danger" class="rounded-3 py-2 fw-bold" @click="confirmingDeleteMessage('everyone')">
-        🚮 Delete for everyone
+      <BButton v-if="messageToDelete?.senderId === auth.user?.id" variant="danger" class="rounded-3 py-2 fw-bold w-100 whatsapp-btn" @click="confirmingDeleteMessage('everyone')">
+        Delete for everyone
       </BButton>
-      <BButton variant="light" class="rounded-3 py-2 mt-2" @click="showDeleteModal = false">
+      <BButton variant="light" class="rounded-3 py-2 mt-1 w-100 whatsapp-btn" @click="showDeleteModal = false">
         Cancel
       </BButton>
     </div>
@@ -733,7 +814,7 @@
 
       <div class="mt-4 pt-3 border-top d-flex gap-2">
         <BButton variant="outline-danger" class="flex-grow-1 rounded-pill fw-bold" @click="handleLeaveGroup">
-          🚪 Leave Group
+          <LogOutIcon size="18" class="me-2" /> Leave Group
         </BButton>
         <BButton variant="secondary" class="flex-grow-1 rounded-pill" @click="showManageGroupModal = false">
           Close
@@ -743,7 +824,7 @@
   </BModal>
 
   <!-- Group Info Modal (For all members) -->
-  <BModal v-model="showRoomInfoModal" title="ℹ️ Group Info" centered hide-footer scrollable>
+  <BModal v-model="showRoomInfoModal" title="Group Info" centered hide-footer scrollable>
     <div v-if="activeRoom" class="p-3">
       <div class="text-center mb-4">
         <BAvatar :text="activeRoom.name.charAt(0)" variant="primary" size="6rem" class="shadow mb-3" />
@@ -772,7 +853,7 @@
 
       <div class="d-grid gap-2">
         <BButton variant="outline-danger" class="rounded-pill fw-bold" @click="handleLeaveGroup">
-          🚪 Leave Group
+          <LogOutIcon size="18" class="me-2" /> Leave Group
         </BButton>
         <BButton variant="light" class="rounded-pill" @click="showRoomInfoModal = false">
           Close
@@ -782,7 +863,7 @@
   </BModal>
 
   <!-- Group Call Invite Modal -->
-  <BModal v-model="showGroupInviteModal" title="👥 Start Group Call" centered hide-footer scrollable>
+  <BModal v-model="showGroupInviteModal" title="Start Group Call" centered hide-footer scrollable>
     <div class="p-2">
       <p class="text-muted small mb-3">Select participants to invite to the call</p>
       <div class="user-selection-list mb-4" style="max-height: 300px; overflow-y: auto;">
@@ -827,7 +908,7 @@
   </BModal>
 
   <!-- Screen Share Initiation Modal (Initiator) -->
-  <BModal v-model="showScreenShareInvite" title="🖥️ Secure Screen Sharing" centered hide-footer no-close-on-backdrop>
+  <BModal v-model="showScreenShareInvite" title="Secure Screen Sharing" centered hide-footer no-close-on-backdrop>
     <div class="text-center p-4">
       <div class="display-1 mb-3">🖥️</div>
       <h5 class="fw-bold mb-3">Your Screen Sharing Session is Ready</h5>
@@ -845,7 +926,7 @@
   </BModal>
 
   <!-- Screen Share Join Modal (Receiver) -->
-  <BModal v-model="showScreenShareJoin" title="🖥️ Join Screen Share" centered hide-footer no-close-on-backdrop>
+  <BModal v-model="showScreenShareJoin" title="Join Screen Share" centered hide-footer no-close-on-backdrop>
     <div class="p-4">
       <div class="text-center mb-4">
         <div class="display-4 mb-2">🖥️</div>
@@ -871,7 +952,7 @@
   </BModal>
   
   <!-- Vault Encryption Modal -->
-  <BModal v-model="showVaultModal" title="🛡️ Message Vault" hide-footer centered header-bg-variant="primary" header-text-variant="white">
+  <BModal v-model="showVaultModal" title="Message Vault" hide-footer centered header-bg-variant="primary" header-text-variant="white">
     <div class="p-3 text-center">
       <div class="mb-4">
         <div class="bg-primary-subtle rounded-circle d-inline-flex p-4 mb-3">
@@ -1037,7 +1118,33 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { 
+  ref, onMounted, computed, watch, nextTick 
+} from 'vue'
+import { 
+  Search as SearchIcon, 
+  Phone as PhoneIcon, 
+  Video as VideoIcon, 
+  Zap as ZapIcon, 
+  Forward as ForwardIcon, 
+  Reply as ReplyIcon, 
+  Copy as CopyIcon, 
+  Edit as EditIcon, 
+  Trash as TrashIcon,
+  MoreVertical as MoreVerticalIcon,
+  Pin as PinIcon,
+  MailOpen as MailOpenIcon,
+  History as HistoryIcon,
+  Heart as HeartIcon,
+  Lock as LockIcon,
+  Unlock as UnlockIcon,
+  ArrowLeft as ArrowLeftIcon,
+  LogOut as LogOutIcon,
+  Monitor as MonitorIcon,
+  Shield as ShieldIcon,
+  Users as UsersIcon,
+  Info as InfoIcon
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
 import { useWebRTC } from '~/composables/useWebRTC'
@@ -1065,8 +1172,17 @@ const auth = useAuthStore()
 const config = useRuntimeConfig()
 const { show: showToast } = useToast()
 
-const sidebarMode = ref('users') // 'users' or 'groups'
+const sidebarMode = ref('users') // 'users', 'groups', 'unread'
 const showNewGroupModal = ref(false)
+const groupName = ref('')
+const selectedGroupMembers = ref([])
+
+const unreadList = computed(() => {
+  const users = chat.users.filter(u => chat.unreadCounts['user_' + u.id] > 0).map(u => ({ ...u, isUser: true }))
+  const rooms = chat.rooms.filter(r => chat.unreadCounts['room_' + r.id] > 0).map(r => ({ ...r, isUser: false }))
+  return [...users, ...rooms]
+})
+
 const showRoomInfoModal = ref(false)
 const newGroupName = ref('')
 const selectedMembersForNewGroup = ref([])
@@ -1176,9 +1292,56 @@ async function forwardToSelected() {
 const activeUser = computed(() => {
     return chat.users.find(u => String(u.id) === String(chat.activeUserId)) || null
 })
-const activeRoom = computed(() => {
-    return chat.rooms.find(r => String(r.id) === String(chat.activeRoomId)) || null
-})
+const activeRoom = computed(() => chat.rooms.find(r => r.id === chat.activeRoomId))
+
+const copyToClipboard = async (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast({ title: 'Copied', body: 'Message copied to clipboard', variant: 'success' })
+      return
+    } catch (err) {
+      console.error('Clipboard API failed, trying fallback', err)
+    }
+  }
+  
+  // Fallback for non-secure context
+  const textArea = document.createElement("textarea")
+  textArea.value = text
+  textArea.style.position = "fixed"
+  textArea.style.left = "-9999px"
+  textArea.style.top = "0"
+  document.body.appendChild(textArea)
+  textArea.focus()
+  textArea.select()
+  
+  try {
+    const successful = document.execCommand('copy')
+    if (successful) {
+      showToast({ title: 'Copied', body: 'Message copied to clipboard', variant: 'success' })
+    } else {
+      showToast({ title: 'Error', body: 'Copy command failed', variant: 'danger' })
+    }
+  } catch (err) {
+    showToast({ title: 'Error', body: 'Fallback copy failed', variant: 'danger' })
+  }
+  document.body.removeChild(textArea)
+}
+
+const markAsUnread = (msg) => {
+  showToast({ title: 'Unread', body: 'Message marked as unread (Feature coming soon)', variant: 'info' })
+}
+
+const archiveChat = (msg) => {
+  showToast({ title: 'Archive', body: 'Chat archived (Feature coming soon)', variant: 'info' })
+}
+
+const addToFavourites = (msg) => {
+  showToast({ title: 'Favourites', body: 'Added to favourites (Feature coming soon)', variant: 'success' })
+}
+
+// Placeholder removed - using real forward modal
+
 const messageContainer = ref(null)
 const showEmojiPicker = ref(false)
 const blockStatus = ref({ blocked_by_me: false, has_blocked_me: false, is_blocked: false })
@@ -1318,12 +1481,16 @@ const incomingScreenSender = ref(null)
 const remoteScreenVideo = ref(null)
 
 async function selectUser(user) {
+    chat.activeUserId = user.id
+    chat.activeRoomId = null
     sidebarMode.value = 'users'
     await chat.fetchHistory(user.id)
     scrollToBottom()
 }
 
 async function selectRoom(room) {
+    chat.activeRoomId = room.id
+    chat.activeUserId = null
     sidebarMode.value = 'groups'
     await chat.fetchHistory(room.id, true)
     scrollToBottom()
@@ -1822,15 +1989,7 @@ function getUserColor(name) {
 const filteredMessages = computed(() => {
     if (!chat.activeUserId && !chat.activeRoomId) return []
     
-    let msgs = []
-    if (chat.activeRoomId) {
-        msgs = chat.messages.filter(m => String(m.roomId) === String(chat.activeRoomId))
-    } else {
-        msgs = chat.messages.filter(m => 
-            (String(m.senderId) === String(chat.activeUserId) && String(m.receiverId) === String(auth.user?.id)) ||
-            (String(m.senderId) === String(auth.user?.id) && String(m.receiverId) === String(chat.activeUserId))
-        )
-    }
+    let msgs = chat.messages
 
     if (showSearchMessages.value && messageSearch.value) {
         return msgs.filter(m => m.content?.toLowerCase().includes(messageSearch.value.toLowerCase()))
@@ -2233,8 +2392,23 @@ watch(filteredMessages, () => {
   100% { background-color: transparent; }
 }
 
-.max-w-75 {
-  max-width: 80%;
+.message:hover .message-actions-overlay {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.hover-primary:hover {
+  color: var(--primary) !important;
+  background: var(--bg-surface-secondary);
+}
+
+.hover-danger:hover {
+  color: var(--danger) !important;
+  background: #fff5f5;
+}
+
+.link-preview {
+  max-width: 300px;
 }
 .screen-share-overlay {
   z-index: 2000;
@@ -2361,5 +2535,28 @@ watch(filteredMessages, () => {
 
 .preview-image img {
     background-color: #f1f5f9;
+}
+
+/* Modal Animations */
+.modal-zoom-in .modal-content {
+  animation: modal-zoom 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modal-zoom {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.whatsapp-btn {
+  transition: all 0.2s ease-in-out;
+}
+
+.whatsapp-btn:hover {
+  transform: scale(1.02);
+  filter: brightness(0.95);
+}
+
+.whatsapp-btn:active {
+  transform: scale(0.98);
 }
 </style>

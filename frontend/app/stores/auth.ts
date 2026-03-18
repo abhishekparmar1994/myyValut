@@ -5,6 +5,7 @@ export const useAuthStore = defineStore('auth', {
     user: null as any,
     token: null as string | null,
     profileImageUrl: null as string | null,
+    theme: 'light' as string,
   }),
   getters: {
     isLoggedIn: (state) => !!state.token,
@@ -19,6 +20,11 @@ export const useAuthStore = defineStore('auth', {
     setUser(user: any) {
       this.user = user
       this.profileImageUrl = user?.profile_image_url ?? null
+      this.theme = user?.theme ?? 'light'
+      if (process.client) {
+        localStorage.setItem('auth_theme', this.theme)
+      }
+      this.applyTheme()
     },
     async logout() {
       const config = useRuntimeConfig()
@@ -35,6 +41,7 @@ export const useAuthStore = defineStore('auth', {
         this.profileImageUrl = null
         if (process.client) {
           localStorage.removeItem('auth_token')
+          localStorage.removeItem('auth_theme')
         }
         navigateTo('/login')
       }
@@ -49,6 +56,11 @@ export const useAuthStore = defineStore('auth', {
         })
         this.user = profile
         this.profileImageUrl = profile.profile_image_url ?? null
+        this.theme = profile.theme ?? 'light'
+        if (process.client) {
+          localStorage.setItem('auth_theme', this.theme)
+        }
+        this.applyTheme()
       } catch (error) {
         this.token = null
         this.user = null
@@ -61,11 +73,26 @@ export const useAuthStore = defineStore('auth', {
     initialize() {
       if (process.client) {
         const token = localStorage.getItem('auth_token')
+        const savedTheme = localStorage.getItem('auth_theme')
+        if (savedTheme) {
+          this.theme = savedTheme
+          this.applyTheme()
+        }
         if (token) {
           this.token = token
           this.fetchUser()
         }
       }
     },
+    applyTheme() {
+      if (!process.client) return
+      const themeId = this.theme || 'light'
+      const body = document.body
+      const themes = ['dark', 'vibrant', 'glass', 'ocean', 'forest', 'midnight']
+      themes.forEach(t => body.classList.remove(`theme-${t}`))
+      if (themeId !== 'light') {
+        body.classList.add(`theme-${themeId}`)
+      }
+    }
   },
 })

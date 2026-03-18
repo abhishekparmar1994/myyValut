@@ -270,18 +270,24 @@
                   <MoreVerticalIcon size="18" />
                 </template>
                 <template v-if="!chat.activeRoomId && activeUser">
-                  <BDropdownItem @click="handleToggleBlock">
-                     <span v-if="isBlockedByMe">🔓 Unblock User</span>
-                     <span v-else class="text-danger">🚫 Block User</span>
+                  <BDropdownItem @click="handleToggleBlock" :class="{ 'text-danger': !isBlockedByMe }">
+                    <BanIcon size="16" class="me-2" /> {{ isBlockedByMe ? 'Unblock User' : 'Block User' }}
                   </BDropdownItem>
-                  <BDropdownDivider />
-                  <BDropdownItem @click="showUserInfoModal = true">ℹ️ User Info</BDropdownItem>
+                  <BDropdownItem @click="showUserInfoModal = true">
+                    <InfoIcon size="16" class="me-2 text-primary" /> User Info
+                  </BDropdownItem>
                 </template>
                 <template v-else-if="chat.activeRoomId">
-                    <BDropdownItem @click="showRoomInfoModal = true">ℹ️ Group Info</BDropdownItem>
-                    <BDropdownItem v-if="isAdmin" @click="openManageGroup">⚙️ Manage Group</BDropdownItem>
+                    <BDropdownItem @click="showRoomInfoModal = true">
+                      <InfoIcon size="16" class="me-2 text-primary" /> Group Info
+                    </BDropdownItem>
+                    <BDropdownItem v-if="isAdmin" @click="openManageGroup">
+                      <SettingsIcon size="16" class="me-2 text-primary" /> Manage Group
+                    </BDropdownItem>
                     <BDropdownDivider />
-                    <BDropdownItem @click="handleLeaveGroup" class="text-danger">🚪 Leave Group</BDropdownItem>
+                    <BDropdownItem @click="handleLeaveGroup" class="text-danger">
+                      <LogOutIcon size="16" class="me-2" /> Leave Group
+                    </BDropdownItem>
                 </template>
               </BDropdown>
             </div>
@@ -374,8 +380,8 @@
   
                   <div 
                     class="message px-3 py-2 shadow-sm max-w-75 position-relative group"
+                    :class="String(msg.senderId) === String(auth.user?.id) ? 'message-me bg-slate shadow-blue text-white' : 'message-them border text-dark'"
                     :style="String(msg.senderId) === String(auth.user?.id) ? 'border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;' : 'border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;'"
-                    :class="String(msg.senderId) === String(auth.user?.id) ? 'message-me bg-slate shadow-blue' : 'message-them bg-white border text-dark'"
                   >
                     <div v-if="msg.roomId && String(msg.senderId) !== String(auth.user?.id)" class="small fw-bold mb-1" :style="{ color: getUserColor(msg.sender?.name) }">
                       {{ msg.sender?.name }}
@@ -404,7 +410,7 @@
                             <MoreVerticalIcon size="16" />
                           </template>
                           <BDropdownItem @click="chat.togglePin(msg.id)">
-                            <PinIcon size="14" class="me-2" /> {{ msg.is_pinned ? 'Unpin' : 'Pin' }}
+                            <PinIcon size="14" class="me-2" /> {{ chat.pinnedMessage?.id === msg.id ? 'Unpin' : 'Pin' }}
                           </BDropdownItem>
                           <BDropdownItem @click="markAsUnread(msg)">
                             <MailOpenIcon size="14" class="me-2" /> Mark As Unread
@@ -743,7 +749,17 @@
   </BModal>
 
   <!-- Manage Group Modal -->
-  <BModal v-model="showManageGroupModal" title="⚙️ Manage Group" centered hide-footer size="lg" scrollable>
+  <BModal v-model="showManageGroupModal" title="Manage Group" centered :hide-footer="true" footer-class="d-none" size="lg" scrollable>
+    <template #modal-header>
+      <div class="d-flex align-items-center gap-2">
+        <SettingsIcon size="20" class="text-primary" />
+        <h5 class="mb-0 fw-bold">Manage Group</h5>
+      </div>
+      <BButton variant="link" class="ms-auto p-0 border-0 text-muted" @click="showManageGroupModal = false">
+        <XIcon size="20" />
+      </BButton>
+    </template>
+    <template #modal-footer></template>
     <div v-if="activeRoom" class="p-3">
       <!-- Edit Name Section -->
       <div class="mb-4">
@@ -803,11 +819,11 @@
           </div>
           <BButton 
             variant="success" 
-            class="w-100 rounded-pill fw-bold" 
+            class="w-100 rounded-pill fw-bold py-2 d-flex align-items-center justify-content-center gap-2 shadow-sm" 
             @click="handleAddMembers" 
             :disabled="membersToAdd.length === 0"
           >
-            ➕ Add Selected Members
+            <UserPlusIcon size="18" /> Add Selected Members
           </BButton>
         </div>
       </div>
@@ -1143,7 +1159,11 @@ import {
   Monitor as MonitorIcon,
   Shield as ShieldIcon,
   Users as UsersIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Ban as BanIcon,
+  Settings as SettingsIcon,
+  UserPlus as UserPlusIcon,
+  X as XIcon
 } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
@@ -2279,6 +2299,7 @@ watch(filteredMessages, () => {
 
 .message-them {
     border-radius: 18px 18px 18px 4px;
+    background-color: #e2e8f0 !important;
 }
 
 .bg-slate {

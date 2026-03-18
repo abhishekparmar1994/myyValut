@@ -28,8 +28,10 @@ redis.on('error', (err) => console.error('Redis Main Client: Error', err));
 subscriber.on('connect', () => console.log('Redis Subscriber: Connected'));
 subscriber.on('error', (err) => console.error('Redis Subscriber: Error', err));
 
-// Store online users
-const onlineUsers = new Map(); // userId -> socketId
+// Store online users: userId -> Set of socket IDs
+const onlineUsers = new Map(); 
+// Track disconnect timeouts: userId -> timeoutId
+const disconnectTimeouts = new Map();
 
 // Authentication Middleware
 io.use((socket, next) => {
@@ -104,7 +106,16 @@ io.on('connection', (socket) => {
     console.log(`User connected: ${userId}`);
 
     // Track presence
-    onlineUsers.set(userId, socket.id);
+    if (!onlineUsers.has(userId)) {
+        onlineUsers.set(userId, new Set());
+    }
+    onlineUsers.get(userId).add(socket.id);
+
+    // Clear any pending offline broadcast for this user
+    if (disconnectTimeouts.has(userId)) {
+        clearTimeout(disconnectTimeouts.get(userId));
+        disconnectTimeouts.delete(userId);
+    }
 
     // Join personal channel
     socket.join(`user.${userId}`);
@@ -131,13 +142,15 @@ io.on('connection', (socket) => {
 
     // Send the current online list to the new user
     const currentOnline = {};
-    onlineUsers.forEach((sid, uid) => {
-        currentOnline[uid] = 'online';
+    onlineUsers.forEach((sockets, uid) => {
+        if (sockets.size > 0) currentOnline[uid] = 'online';
     });
     socket.emit('presence.state', currentOnline);
 
-    // Broadcast to others that this user is online
-    io.emit('presence.update', { userId, status: 'online' });
+    // Broadcast to others that this user is online (only if it's their first active session)
+    if (onlineUsers.get(userId).size === 1) {
+        io.emit('presence.update', { userId, status: 'online' });
+    }
 
     // --- Private Messaging ---
     socket.on('chat.private.send', async ({ receiverId, content, type, fileName, replyToId, isForwarded, linkMetadata }, callback) => {
@@ -415,9 +428,25 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`User disconnected: ${userId}`);
-        onlineUsers.delete(userId);
-        io.emit('presence.update', { userId, status: 'offline' });
+        console.log(`User socket disconnected: ${userId} (${socket.id})`);
+        
+        const sessions = onlineUsers.get(userId);
+        if (sessions) {
+            sessions.delete(socket.id);
+            if (sessions.size === 0) {
+                // If no sessions left, wait 5 seconds before marking as offline
+                // to account for page refreshes/reconnects
+                const timeoutId = setTimeout(() => {
+                    if (!onlineUsers.has(userId) || onlineUsers.get(userId).size === 0) {
+                        console.log(`User ${userId} IS actually offline now`);
+                        onlineUsers.delete(userId);
+                        disconnectTimeouts.delete(userId);
+                        io.emit('presence.update', { userId, status: 'offline' });
+                    }
+                }, 5000); // 5 second grace period
+                disconnectTimeouts.set(userId, timeoutId);
+            }
+        }
     });
 });
 

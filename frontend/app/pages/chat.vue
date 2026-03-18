@@ -1,5 +1,5 @@
 <template>
-  <BContainer fluid class="chat-container px-0 py-0 px-md-4 py-md-3" :class="{ 'earthquake-shake': chat.isShaking }">
+  <BContainer fluid class="chat-container px-md-5 py-md-3" :class="{ 'earthquake-shake': chat.isShaking }">
     <!-- Poke Overlay -->
     <div v-if="chat.isShaking" class="poke-overlay">
        <div class="poke-text">ATTENTION!</div>
@@ -65,9 +65,16 @@
               @click="sidebarMode = 'unread'"
             >
                 Unread
-                <BBadge v-if="(chat.totalChatsUnread + chat.totalGroupsUnread) > 0" variant="danger" pill class="ms-1 px-1" style="font-size: 0.65rem;">
-                  {{ chat.totalChatsUnread + chat.totalGroupsUnread }}
+                <BBadge v-if="unreadList.length > 0" variant="danger" pill class="ms-1 px-1" style="font-size: 0.65rem;">
+                  {{ unreadList.length }}
                 </BBadge>
+              </button>
+            <button 
+              class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all position-relative" 
+              :class="{ 'bg-primary text-white shadow-sm active': sidebarMode === 'archived', 'text-muted': sidebarMode !== 'archived' }"
+              @click="sidebarMode = 'archived'"
+            >
+                Archived
               </button>
           </div>
         </div>
@@ -96,15 +103,18 @@
               </div>
               <div class="flex-grow-1 overflow-hidden d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <h6 class="mb-0 fw-bold text-truncate me-2 text-main">{{ user.name }}</h6>
+                  <div class="d-flex align-items-center gap-1 overflow-hidden">
+                    <h6 class="mb-0 fw-bold text-truncate text-main">{{ user.name }}</h6>
+                    <HeartIcon v-if="user.is_favourite" size="12" class="text-danger flex-shrink-0" />
+                  </div>
                   <small class="text-muted flex-shrink-0 xx-small">{{ formatTime(user.last_message_time) }}</small>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
                   <small class="text-primary text-truncate d-block fw-bold" v-if="chat.typingUsers[String(user.id)]">typing...</small>
                   <small v-else class="text-muted text-truncate d-block">{{ getLastMessagePreview(user) }}</small>
                   
-                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill class="ms-2 flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
-                    {{ chat.unreadCounts['user_' + user.id] }}
+                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0 || user.is_unread_manual" variant="danger" pill class="ms-2 flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
+                    {{ chat.unreadCounts['user_' + user.id] || 1 }}
                   </BBadge>
                 </div>
               </div>
@@ -129,13 +139,16 @@
               <BAvatar v-else variant="secondary" :text="user.name.charAt(0)" />
               <div class="flex-grow-1 overflow-hidden d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <h6 class="mb-0 fw-bold text-truncate me-2 text-main">{{ user.name }}</h6>
+                  <div class="d-flex align-items-center gap-1 overflow-hidden">
+                    <h6 class="mb-0 fw-bold text-truncate text-main">{{ user.name }}</h6>
+                    <HeartIcon v-if="user.is_favourite" size="12" class="text-danger flex-shrink-0" />
+                  </div>
                   <small class="text-muted flex-shrink-0 xx-small">{{ formatTime(user.last_message_time) }}</small>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
                   <small class="text-muted text-truncate d-block">{{ getLastMessagePreview(user) }}</small>
-                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0" variant="danger" pill class="ms-2 flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
-                    {{ chat.unreadCounts['user_' + user.id] }}
+                  <BBadge v-if="chat.unreadCounts['user_' + user.id] > 0 || user.is_unread_manual" variant="danger" pill class="ms-2 flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
+                    {{ chat.unreadCounts['user_' + user.id] || 1 }}
                   </BBadge>
                 </div>
               </div>
@@ -160,9 +173,12 @@
               <BAvatar :text="room.name.charAt(0)" variant="info" />
               <div class="flex-grow-1 overflow-hidden d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <h6 class="mb-0 fw-bold text-truncate me-2 text-main">{{ room.name }}</h6>
-                  <BBadge v-if="chat.unreadCounts['room_' + room.id] > 0" variant="danger" pill class="flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
-                    {{ chat.unreadCounts['room_' + room.id] }}
+                  <div class="d-flex align-items-center gap-1 overflow-hidden">
+                    <h6 class="mb-0 fw-bold text-truncate text-main">{{ room.name }}</h6>
+                    <HeartIcon v-if="room.is_favourite" size="12" class="text-danger flex-shrink-0" />
+                  </div>
+                  <BBadge v-if="chat.unreadCounts['room_' + room.id] > 0 || room.is_unread_manual" variant="danger" pill class="flex-shrink-0" style="font-size: 0.65rem; min-width: 1.2rem;">
+                    {{ chat.unreadCounts['room_' + room.id] || 1 }}
                   </BBadge>
                 </div>
                 <small class="text-muted d-block">{{ room.members.length }} members</small>
@@ -176,6 +192,28 @@
             <BButton variant="outline-primary" class="w-100 rounded-pill py-2 border-dashed" @click="showNewGroupModal = true">
               + Create New Group
             </BButton>
+          </div>
+        </template>
+
+        <template v-else-if="sidebarMode === 'archived'">
+          <!-- Archived List -->
+          <div v-if="archivedList.length > 0">
+            <div 
+              v-for="item in archivedList" 
+              :key="item.isUser ? 'u' + item.id : 'r' + item.id" 
+              class="user-item p-3 mb-2 rounded-3 d-flex align-items-center gap-3 cursor-pointer transition-all"
+              @click="item.isUser ? selectUser(item) : selectRoom(item)"
+            >
+              <BAvatar v-if="item.isUser" :src="getProfileImageUrl(item)" :text="item.name.charAt(0)" variant="secondary" />
+              <BAvatar v-else :text="item.name.charAt(0)" variant="info" />
+              <div class="flex-grow-1 overflow-hidden">
+                <h6 class="mb-0 fw-bold text-truncate text-main">{{ item.name }}</h6>
+                <small class="text-muted">Archived Chat</small>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-5 text-muted">
+            <small>No archived chats</small>
           </div>
         </template>
 
@@ -568,15 +606,15 @@
                 </div>
                 
                 <div class="d-flex gap-2">
-                  <BButton variant="light" @click="showEmojiPicker = !showEmojiPicker" class="rounded-circle p-2 shadow-none border-0">
-                    <span>😊</span>
+                  <BButton variant="light" @click="showEmojiPicker = !showEmojiPicker" class="rounded-circle p-2 shadow-none border-0 text-muted hover-primary">
+                    <SmileIcon size="20" />
                   </BButton>
 
                   <div class="media-upload">
                     <input type="file" ref="fileInput" class="d-none" @change="onFileSelected" />
-                    <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2 shadow-none border-0" :disabled="uploading">
+                    <BButton variant="light" @click="$refs.fileInput.click()" class="rounded-circle p-2 shadow-none border-0 text-muted hover-primary" :disabled="uploading">
                       <BSpinner small v-if="uploading" />
-                      <span v-else>📎</span>
+                      <PaperclipIcon v-else size="20" />
                     </BButton>
                   </div>
                 </div>
@@ -589,8 +627,8 @@
                   @input="handleTyping"
                   @focus="showEmojiPicker = false"
                 />
-                <BButton type="submit" variant="primary" class="rounded-circle d-flex align-items-center justify-content-center p-2 shadow-none" style="width: 44px; height: 44px;">
-                  ✈️
+                <BButton type="submit" variant="primary" class="rounded-circle d-flex align-items-center justify-content-center p-0 shadow-sm transition-all hover-bounce" style="width: 44px; height: 44px;">
+                  <SendHorizontalIcon size="20" class="ms-1" />
                 </BButton>
               </BForm>
             </div>
@@ -1163,7 +1201,10 @@ import {
   Ban as BanIcon,
   Settings as SettingsIcon,
   UserPlus as UserPlusIcon,
-  X as XIcon
+  X as XIcon,
+  Smile as SmileIcon,
+  Paperclip as PaperclipIcon,
+  SendHorizontal as SendHorizontalIcon
 } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
@@ -1198,8 +1239,14 @@ const groupName = ref('')
 const selectedGroupMembers = ref([])
 
 const unreadList = computed(() => {
-  const users = chat.users.filter(u => chat.unreadCounts['user_' + u.id] > 0).map(u => ({ ...u, isUser: true }))
-  const rooms = chat.rooms.filter(r => chat.unreadCounts['room_' + r.id] > 0).map(r => ({ ...r, isUser: false }))
+  const users = chat.users.filter(u => chat.unreadCounts['user_' + u.id] > 0 || u.is_unread_manual).map(u => ({ ...u, isUser: true }))
+  const rooms = chat.rooms.filter(r => chat.unreadCounts['room_' + r.id] > 0 || r.is_unread_manual).map(r => ({ ...r, isUser: false }))
+  return [...users, ...rooms]
+})
+
+const archivedList = computed(() => {
+  const users = chat.users.filter(u => u.is_archived).map(u => ({ ...u, isUser: true }))
+  const rooms = chat.rooms.filter(r => r.is_archived).map(r => ({ ...r, isUser: false }))
   return [...users, ...rooms]
 })
 
@@ -1348,16 +1395,60 @@ const copyToClipboard = async (text) => {
   document.body.removeChild(textArea)
 }
 
-const markAsUnread = (msg) => {
-  showToast({ title: 'Unread', body: 'Message marked as unread (Feature coming soon)', variant: 'info' })
+const markAsUnread = async () => {
+    const isRoom = !!chat.activeRoomId
+    const targetId = chat.activeRoomId || chat.activeUserId
+    if (!targetId) return
+    
+    // Determine current status
+    let currentStatus = false
+    if (isRoom) {
+        const room = chat.rooms.find(r => String(r.id) === String(targetId))
+        currentStatus = room?.is_unread_manual || false
+    } else {
+        const user = chat.users.find(u => String(u.id) === String(targetId))
+        currentStatus = user?.is_unread_manual || false
+    }
+
+    const newStatus = !currentStatus
+    await chat.toggleUnread(targetId, isRoom, newStatus)
+    showToast({ 
+        title: newStatus ? 'Marked Unread' : 'Marked Read', 
+        body: newStatus ? 'Conversation marked as unread' : 'Conversation marked as read', 
+        variant: 'info' 
+    })
 }
 
-const archiveChat = (msg) => {
-  showToast({ title: 'Archive', body: 'Chat archived (Feature coming soon)', variant: 'info' })
+const archiveChat = async () => {
+    const isRoom = !!chat.activeRoomId
+    const targetId = chat.activeRoomId || chat.activeUserId
+    if (!targetId) return
+    
+    const res = await chat.toggleArchive(targetId, isRoom)
+    showToast({ 
+        title: res ? 'Archived' : 'Unarchived', 
+        body: res ? 'Chat moved to archive' : 'Chat restored from archive', 
+        variant: 'info' 
+    })
+    
+    if (res) {
+        // Deselect chat if archived
+        activeUser.value = null
+        chat.activeRoomId = null
+    }
 }
 
-const addToFavourites = (msg) => {
-  showToast({ title: 'Favourites', body: 'Added to favourites (Feature coming soon)', variant: 'success' })
+const addToFavourites = async () => {
+    const isRoom = !!chat.activeRoomId
+    const targetId = chat.activeRoomId || chat.activeUserId
+    if (!targetId) return
+    
+    const res = await chat.toggleFavourite(targetId, isRoom)
+    showToast({ 
+        title: 'Favourites', 
+        body: res ? 'Added to favourites' : 'Removed from favourites', 
+        variant: res ? 'success' : 'info' 
+    })
 }
 
 // Placeholder removed - using real forward modal
@@ -1851,24 +1942,32 @@ async function handleScroll(e) {
 
 // Use store-managed users
 const onlineUsers = computed(() => {
-    return chat.users.filter(u => {
-        const isOnline = chat.presence[String(u.id)] === 'online' && String(u.id) !== String(auth.user?.id)
-        if (!userSearch.value) return isOnline
-        return isOnline && u.name.toLowerCase().includes(userSearch.value.toLowerCase())
-    })
+    return chat.users
+        .filter(u => {
+            const isOnline = chat.presence[String(u.id)] === 'online' && String(u.id) !== String(auth.user?.id)
+            const matchesSearch = !userSearch.value || u.name.toLowerCase().includes(userSearch.value.toLowerCase())
+            return isOnline && matchesSearch && !u.is_archived
+        })
+        .sort((a, b) => (b.is_favourite ? 1 : 0) - (a.is_favourite ? 1 : 0))
 })
 
 const offlineUsers = computed(() => {
-    return chat.users.filter(u => {
-        const isOffline = (!chat.presence[String(u.id)] || chat.presence[String(u.id)] === 'offline') && String(u.id) !== String(auth.user?.id)
-        if (!userSearch.value) return isOffline
-        return isOffline && u.name.toLowerCase().includes(userSearch.value.toLowerCase())
-    })
+    return chat.users
+        .filter(u => {
+            const isOffline = (!chat.presence[String(u.id)] || chat.presence[String(u.id)] === 'offline') && String(u.id) !== String(auth.user?.id)
+            const matchesSearch = !userSearch.value || u.name.toLowerCase().includes(userSearch.value.toLowerCase())
+            return isOffline && matchesSearch && !u.is_archived
+        })
+        .sort((a, b) => (b.is_favourite ? 1 : 0) - (a.is_favourite ? 1 : 0))
 })
 
 const filteredRooms = computed(() => {
-    if (!userSearch.value) return chat.rooms
-    return chat.rooms.filter(r => r.name.toLowerCase().includes(userSearch.value.toLowerCase()))
+    return chat.rooms
+        .filter(r => {
+            const matchesSearch = !userSearch.value || r.name.toLowerCase().includes(userSearch.value.toLowerCase())
+            return matchesSearch && !r.is_archived
+        })
+        .sort((a, b) => (b.is_favourite ? 1 : 0) - (a.is_favourite ? 1 : 0))
 })
 
 const uploading = ref(false)

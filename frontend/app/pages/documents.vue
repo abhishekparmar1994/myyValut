@@ -2,13 +2,16 @@
   <BContainer class="py-5">
     <!-- Header -->
     <BRow class="mb-4 align-items-center">
-      <BCol md="8" class="mb-3 mb-md-0">
-        <h1 class="fw-bold mb-0">📄 My Documents</h1>
-        <p class="text-muted mb-0">Securely store and manage your important documents</p>
+      <BCol md="8" class="mb-3 mb-md-0 d-flex align-items-center">
+        <FileTextIcon :size="32" class="text-primary me-3" />
+        <div>
+          <h1 class="fw-bold mb-0">My Documents</h1>
+          <p class="text-muted mb-0">Securely store and manage your important documents</p>
+        </div>
       </BCol>
       <BCol md="4" class="text-md-end">
-        <BButton variant="primary" @click="showUploadModal = true" class="fw-bold px-4 w-100 w-md-auto">
-          + Upload Document
+        <BButton variant="primary" @click="showUploadModal = true" class="fw-bold px-4 w-100 w-md-auto d-flex align-items-center justify-content-center gap-2">
+          <PlusIcon :size="18" /> Upload Document
         </BButton>
       </BCol>
     </BRow>
@@ -20,9 +23,10 @@
         :key="cat.value"
         :active="activeCategory === cat.value"
         @click="activeCategory = cat.value"
-        class="fw-semibold"
+        class="fw-semibold d-flex align-items-center gap-2"
       >
-        {{ cat.icon }} {{ cat.label }}
+        <component :is="cat.icon" :size="16" />
+        {{ cat.label }}
         <BBadge v-if="countByCategory(cat.value)" pill variant="primary" class="ms-1">
           {{ cat.value === 'all' ? documents.length : countByCategory(cat.value) }}
         </BBadge>
@@ -36,10 +40,14 @@
 
     <!-- Empty State -->
     <BCard v-else-if="filteredDocuments.length === 0" class="text-center py-5 border-0 shadow-sm">
-      <div class="display-1 mb-3">📂</div>
+      <div class="mb-3 text-muted opacity-50">
+        <FolderOpenIcon :size="64" class="mx-auto" />
+      </div>
       <h3 class="fw-bold">No Documents Yet</h3>
       <p class="text-muted">Upload your Aadhaar, PAN, or any other document to keep it secure.</p>
-      <BButton variant="primary" @click="showUploadModal = true">Upload Your First Document</BButton>
+      <BButton variant="primary" @click="showUploadModal = true" class="d-inline-flex align-items-center gap-2">
+        <PlusIcon :size="18" /> Upload Your First Document
+      </BButton>
     </BCard>
 
     <!-- Document Grid -->
@@ -49,37 +57,44 @@
         :key="doc.id"
         md="4" sm="6" class="mb-4"
       >
-        <BCard class="h-100 shadow-sm border-0 doc-card">
+        <BCard class="h-100 shadow-sm border-0 doc-card d-flex flex-column">
           <!-- File type icon area -->
-          <div class="text-center py-3 rounded mb-3" :class="categoryColor(doc.category)">
-            <span style="font-size: 2.5rem;">{{ fileIcon(doc.mime_type) }}</span>
+          <div class="text-center py-4 rounded mb-3" :class="categoryColor(doc.category)">
+            <component :is="fileIcon(doc.mime_type)" :size="48" class="text-primary" />
           </div>
 
-          <h5 class="fw-bold mb-1 text-truncate" :title="doc.name">{{ doc.name }}</h5>
-          <p class="text-muted small mb-1">
-            <BBadge :variant="categoryBadge(doc.category)" class="me-1">{{ doc.document_type }}</BBadge>
-          </p>
-          <p class="text-muted small mb-3">
-            📁 {{ doc.file_name }}<br>
-            📦 {{ doc.file_size }} &nbsp;·&nbsp; 📅 {{ doc.created_at }}
-          </p>
+          <h5 class="fw-bold mb-1 text-truncate h6" :title="doc.name">{{ doc.name }}</h5>
+          <div class="mb-2">
+            <BBadge :variant="categoryBadge(doc.category)" class="small">{{ doc.document_type }}</BBadge>
+          </div>
+          
+          <div class="text-muted small mb-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <PaperclipIcon :size="12" /> <span class="text-truncate" style="max-width: 200px;">{{ doc.file_name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+               <CalendarIcon :size="12" /> {{ doc.created_at }} · {{ doc.file_size }}
+            </div>
+          </div>
+          
           <p v-if="doc.notes" class="text-muted small fst-italic border-top pt-2 mb-3">{{ doc.notes }}</p>
 
           <div class="d-flex gap-2 mt-auto">
             <BButton
               size="sm"
               variant="outline-primary"
-              class="flex-grow-1 fw-semibold"
+              class="flex-grow-1 fw-semibold d-flex align-items-center justify-content-center gap-1"
               @click="downloadDoc(doc)"
             >
-              ⬇ Download
+              <DownloadIcon :size="14" /> Download
             </BButton>
             <BButton
               size="sm"
               variant="outline-danger"
+              class="d-flex align-items-center justify-content-center"
               @click="deleteDoc(doc.id)"
             >
-              🗑
+              <Trash2Icon :size="14" />
             </BButton>
           </div>
         </BCard>
@@ -127,12 +142,14 @@
           >
             <input ref="fileInput" type="file" class="d-none" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" @change="onFileChange" />
             <div v-if="!form.file">
-              <div class="fs-1 mb-2">📎</div>
+              <div class="mb-2 text-primary opacity-50">
+                <PaperclipIcon :size="48" class="mx-auto" />
+              </div>
               <p class="fw-semibold mb-1">Drag & drop or click to browse</p>
               <p class="text-muted small mb-0">Supports: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (max 10MB)</p>
             </div>
-            <div v-else class="text-success fw-semibold">
-              ✅ {{ form.file.name }} ({{ (form.file.size / 1024).toFixed(1) }} KB)
+            <div v-else class="text-success fw-semibold d-flex align-items-center justify-content-center gap-2">
+              <CheckIcon :size="18" /> {{ form.file.name }} ({{ (form.file.size / 1024).toFixed(1) }} KB)
             </div>
           </div>
         </BFormGroup>
@@ -146,6 +163,12 @@
 </template>
 
 <script setup>
+import { 
+  FileTextIcon, FolderIcon, FolderOpenIcon, ContactIcon, 
+  HomeIcon, ClipboardListIcon, ReceiptIcon, ImageIcon, 
+  BookIcon, BarChart3Icon, FileEditIcon, DownloadIcon, 
+  Trash2Icon, PaperclipIcon, CheckIcon, PlusIcon, CalendarIcon
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ middleware: 'auth' })
@@ -167,18 +190,18 @@ const form = reactive({
 })
 
 const categories = [
-  { value: 'all',      label: 'All',      icon: '📁' },
-  { value: 'identity', label: 'Identity', icon: '🪪' },
-  { value: 'property', label: 'Property', icon: '🏠' },
-  { value: 'general',  label: 'General',  icon: '📋' },
-  { value: 'bills',    label: 'Bills',    icon: '🧾' },
+  { value: 'all',      label: 'All',      icon: FolderIcon },
+  { value: 'identity', label: 'Identity', icon: ContactIcon },
+  { value: 'property', label: 'Property', icon: HomeIcon },
+  { value: 'general',  label: 'General',  icon: ClipboardListIcon },
+  { value: 'bills',    label: 'Bills',    icon: ReceiptIcon },
 ]
 
 const categoryOptions = [
-  { value: 'identity', text: '🪪 Identity Documents' },
-  { value: 'property', text: '🏠 Property Documents' },
-  { value: 'general',  text: '📋 General Documents' },
-  { value: 'bills',    text: '🧾 Bills & Invoices' },
+  { value: 'identity', text: 'Identity Documents' },
+  { value: 'property', text: 'Property Documents' },
+  { value: 'general',  text: 'General Documents' },
+  { value: 'bills',    text: 'Bills & Invoices' },
 ]
 
 const documentTypes = {
@@ -206,12 +229,12 @@ function countByCategory(cat) {
 }
 
 function fileIcon(mime) {
-  if (!mime) return '📄'
-  if (mime.startsWith('image/')) return '🖼️'
-  if (mime === 'application/pdf') return '📕'
-  if (mime.includes('spreadsheet') || mime.includes('excel')) return '📊'
-  if (mime.includes('word') || mime.includes('document')) return '📝'
-  return '📄'
+  if (!mime) return FileTextIcon
+  if (mime.startsWith('image/')) return ImageIcon
+  if (mime === 'application/pdf') return BookIcon
+  if (mime.includes('spreadsheet') || mime.includes('excel')) return BarChart3Icon
+  if (mime.includes('word') || mime.includes('document')) return FileEditIcon
+  return FileTextIcon
 }
 
 function categoryColor(cat) {

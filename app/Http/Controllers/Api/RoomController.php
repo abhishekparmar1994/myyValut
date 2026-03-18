@@ -52,7 +52,14 @@ class RoomController extends Controller
                 ->latest()
                 ->limit(1)
             ])
-            ->get();
+            ->get()
+            ->map(function ($room) use ($userId) {
+                $myMember = $room->pivot; // Since we queried through $user->rooms(), pivot is the member record for $userId
+                $room->is_archived = (bool)($myMember->is_archived ?? false);
+                $room->is_favourite = (bool)($myMember->is_favourite ?? false);
+                $room->is_unread_manual = (bool)($myMember->is_unread_manual ?? false);
+                return $room;
+            });
 
         return response()->json($rooms);
     }

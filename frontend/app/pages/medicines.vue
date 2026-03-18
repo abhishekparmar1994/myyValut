@@ -2,12 +2,17 @@
   <BContainer class="py-5">
     <!-- Header -->
     <BRow class="mb-4 align-items-center">
-      <BCol md="8" class="mb-3 mb-md-0">
-        <h1 class="fw-bold mb-0">💊 Medicines</h1>
-        <p class="text-muted mb-0">Track your daily medicines and never miss a dose</p>
+      <BCol md="8" class="mb-3 mb-md-0 d-flex align-items-center">
+        <PillIcon :size="32" class="text-primary me-3" />
+        <div>
+          <h1 class="fw-bold mb-0">Medicines</h1>
+          <p class="text-muted mb-0">Track your daily medicines and never miss a dose</p>
+        </div>
       </BCol>
       <BCol md="4" class="text-md-end">
-        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto">+ Add Medicine</BButton>
+        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto d-flex align-items-center justify-content-center gap-2">
+          <PlusIcon :size="18" /> Add Medicine
+        </BButton>
       </BCol>
     </BRow>
 
@@ -15,7 +20,9 @@
     <BCard class="border-0 shadow-sm mb-4">
       <template #header>
         <div class="d-flex justify-content-between align-items-center py-1">
-          <h3 class="h6 fw-bold mb-0">📅 Today's Schedule</h3>
+          <h3 class="h6 fw-bold mb-0 d-flex align-items-center gap-2">
+            <CalendarIcon :size="18" class="text-primary" /> Today's Schedule
+          </h3>
           <span class="small text-muted">{{ todayDate }}</span>
         </div>
       </template>
@@ -28,8 +35,10 @@
 
       <div v-else class="d-flex flex-wrap gap-3 py-1">
         <div v-for="med in todayMedicines" :key="med.id"
-          class="border rounded px-3 py-2 bg-light d-flex align-items-center gap-2" style="min-width:220px">
-          <span class="fs-5">💊</span>
+          class="border rounded px-3 py-2 bg-light d-flex align-items-center gap-3" style="min-width:220px">
+          <div class="p-2 rounded bg-white shadow-sm">
+            <PillIcon :size="20" class="text-primary" />
+          </div>
           <div>
             <p class="fw-semibold mb-0 small">{{ med.name }}</p>
             <p class="text-muted mb-0" style="font-size:0.72rem">{{ med.dosage }} · {{ med.times.join(', ') }}</p>
@@ -47,19 +56,30 @@
       <div v-if="loading" class="text-center py-4"><BSpinner variant="primary" /></div>
 
       <div v-else-if="medicines.length === 0" class="text-center py-5">
-        <div class="display-1 mb-2">💊</div>
+        <div class="mb-3 text-muted opacity-50">
+          <PillIcon :size="64" class="mx-auto" />
+        </div>
         <h4 class="fw-bold">No medicines added yet</h4>
         <p class="text-muted">Add your first medicine to start tracking doses.</p>
-        <BButton variant="primary" @click="openModal()">+ Add Medicine</BButton>
+        <BButton variant="primary" @click="openModal()" class="d-inline-flex align-items-center gap-2">
+          <PlusIcon :size="18" /> Add Medicine
+        </BButton>
       </div>
 
       <BTable v-else :items="medicines" :fields="tableFields" responsive hover class="mb-0">
         <template #cell(name)="{ item }">
-          <p class="fw-bold mb-0">{{ item.name }}</p>
-          <small class="text-muted">{{ item.dosage }}</small>
+          <div class="d-flex align-items-center gap-2">
+            <PillIcon :size="16" class="text-primary" />
+            <div>
+              <p class="fw-bold mb-0">{{ item.name }}</p>
+              <small class="text-muted">{{ item.dosage }}</small>
+            </div>
+          </div>
         </template>
         <template #cell(times)="{ item }">
-          <BBadge v-for="t in item.times" :key="t" variant="secondary" class="me-1">{{ t }}</BBadge>
+          <BBadge v-for="t in item.times" :key="t" variant="secondary" class="me-1 d-inline-flex align-items-center gap-1">
+            <ClockIcon :size="10" /> {{ t }}
+          </BBadge>
         </template>
         <template #cell(duration)="{ item }">
           <span class="small text-muted">
@@ -74,8 +94,12 @@
         </template>
         <template #cell(actions)="{ item }">
           <div class="d-flex gap-2">
-            <BButton size="sm" variant="outline-primary" @click="openModal(item)">Edit</BButton>
-            <BButton size="sm" variant="outline-danger" @click="deleteMedicine(item.id)">Delete</BButton>
+            <BButton size="sm" variant="outline-primary" @click="openModal(item)" class="d-flex align-items-center gap-1">
+              <PencilIcon :size="14" /> Edit
+            </BButton>
+            <BButton size="sm" variant="outline-danger" @click="deleteMedicine(item.id)" class="d-flex align-items-center gap-1">
+              <Trash2Icon :size="14" /> Delete
+            </BButton>
           </div>
         </template>
       </BTable>
@@ -101,14 +125,16 @@
 
         <BFormGroup label="Times to Take (add one or more)" class="mb-3 fw-semibold">
           <div class="d-flex flex-wrap gap-2 mb-2">
-            <BBadge v-for="(t, i) in form.times" :key="i" variant="primary" class="px-3 py-2 d-flex align-items-center gap-1">
+            <BBadge v-for="(t, i) in form.times" :key="i" variant="primary" class="px-3 py-2 d-flex align-items-center gap-2">
               {{ t }}
-              <span style="cursor:pointer" @click="removeTime(i)">✕</span>
+              <XIcon :size="14" style="cursor:pointer" @click="removeTime(i)" />
             </BBadge>
           </div>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 text-md-start">
             <BFormInput v-model="newTime" type="time" style="max-width: 160px;" />
-            <BButton variant="outline-primary" size="sm" @click="addTime">+ Add Time</BButton>
+            <BButton variant="outline-primary" size="sm" @click="addTime" class="d-flex align-items-center gap-1">
+              <PlusIcon :size="14" /> Add Time
+            </BButton>
           </div>
           <div class="d-flex gap-2 mt-2 flex-wrap">
             <BButton v-for="preset in timePresets" :key="preset" size="sm" variant="light"
@@ -138,6 +164,10 @@
 </template>
 
 <script setup>
+import { 
+  PillIcon, CalendarIcon, PlusIcon, PencilIcon, 
+  Trash2Icon, XIcon, ClockIcon 
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ middleware: 'auth' })
@@ -186,7 +216,7 @@ function authHeaders() {
 }
 
 function addTime(t) {
-  const time = t || newTime.value
+  const time = typeof t === 'string' ? t : newTime.value
   if (time && !form.times.includes(time)) {
     form.times.push(time)
     form.times.sort()

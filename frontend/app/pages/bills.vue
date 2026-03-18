@@ -2,12 +2,17 @@
   <BContainer class="py-5">
     <!-- Header -->
     <BRow class="mb-4 align-items-center">
-      <BCol md="8" class="mb-3 mb-md-0">
-        <h1 class="fw-bold mb-0">💡 Bill Payment Tracker</h1>
-        <p class="text-muted mb-0">Track recurring bills, due dates, and payment status</p>
+      <BCol md="8" class="mb-3 mb-md-0 d-flex align-items-center">
+        <LightbulbIcon :size="32" class="text-primary me-3" />
+        <div>
+          <h1 class="fw-bold mb-0">Bill Payment Tracker</h1>
+          <p class="text-muted mb-0">Track recurring bills, due dates, and payment status</p>
+        </div>
       </BCol>
       <BCol md="4" class="text-md-end">
-        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto">+ Add Bill</BButton>
+        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto d-flex align-items-center justify-content-center gap-2">
+          <PlusIcon :size="18" /> Add Bill
+        </BButton>
       </BCol>
     </BRow>
 
@@ -38,18 +43,29 @@
 
     <!-- Empty -->
     <BCard v-else-if="bills.length === 0" class="border-0 shadow-sm text-center py-5">
-      <div class="display-1 mb-2">💡</div>
+      <div class="mb-3 text-muted opacity-50">
+        <LightbulbIcon :size="64" class="mx-auto" />
+      </div>
       <h4 class="fw-bold">No bills added yet</h4>
       <p class="text-muted">Add your first bill to start tracking due dates.</p>
-      <BButton variant="primary" @click="openModal()">+ Add Bill</BButton>
+      <BButton variant="primary" @click="openModal()" class="d-inline-flex align-items-center gap-2">
+        <PlusIcon :size="18" /> Add Bill
+      </BButton>
     </BCard>
 
     <!-- Bills Table -->
     <BCard v-else class="border-0 shadow-sm">
       <BTable :items="bills" :fields="tableFields" responsive hover class="mb-0">
         <template #cell(name)="{ item }">
-          <p class="fw-bold mb-0">{{ categoryIcon(item.category) }} {{ item.name }}</p>
-          <small class="text-muted">{{ categoryLabel(item.category) }}</small>
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-2 rounded bg-light">
+              <component :is="getCategory(item.category).icon" :size="20" :class="getCategory(item.category).color" />
+            </div>
+            <div>
+              <p class="fw-bold mb-0 text-main">{{ item.name }}</p>
+              <small class="text-muted">{{ getCategory(item.category).text }}</small>
+            </div>
+          </div>
         </template>
         <template #cell(amount)="{ item }">
           <span class="fw-semibold">{{ item.amount ? '₹' + item.amount : '—' }}</span>
@@ -57,25 +73,37 @@
         <template #cell(due)="{ item }">
           <div>
             <span class="fw-semibold">{{ ordinal(item.due_day) }} of month</span><br>
-            <small :class="item.days_until_due <= 3 ? 'text-danger fw-bold' : 'text-muted'">
-              {{ item.days_until_due === 0 ? '⚠️ Due Today' :
-                 item.days_until_due < 0 ? 'Overdue' :
-                 `in ${item.days_until_due} days` }}
+            <small :class="item.days_until_due <= 3 ? 'text-danger fw-bold' : 'text-muted'" class="d-flex align-items-center gap-1">
+              <template v-if="item.days_until_due === 0">
+                <AlertTriangleIcon :size="14" /> Due Today
+              </template>
+              <template v-else-if="item.days_until_due < 0">
+                 <AlertTriangleIcon :size="14" /> Overdue
+              </template>
+              <template v-else>
+                 <ClockIcon :size="14" /> in {{ item.days_until_due }} days
+              </template>
             </small>
           </div>
         </template>
         <template #cell(status)="{ item }">
-          <BBadge :variant="item.is_paid_this_month ? 'success' : 'warning'">
-            {{ item.is_paid_this_month ? '✅ Paid' : '⏳ Pending' }}
+          <BBadge :variant="item.is_paid_this_month ? 'success' : 'warning'" class="d-inline-flex align-items-center gap-1 px-2 py-1">
+            <CheckCircleIcon v-if="item.is_paid_this_month" :size="12" />
+            <ClockIcon v-else :size="12" />
+            {{ item.is_paid_this_month ? 'Paid' : 'Pending' }}
           </BBadge>
         </template>
         <template #cell(actions)="{ item }">
           <div class="d-flex gap-2">
-            <BButton v-if="!item.is_paid_this_month" size="sm" variant="success" @click="markPaid(item.id)">
-              Mark Paid
+            <BButton v-if="!item.is_paid_this_month" size="sm" variant="success" @click="markPaid(item.id)" class="d-flex align-items-center gap-1">
+              <CheckCircleIcon :size="14" /> Mark Paid
             </BButton>
-            <BButton size="sm" variant="outline-primary" @click="openModal(item)">Edit</BButton>
-            <BButton size="sm" variant="outline-danger" @click="deleteBill(item.id)">🗑</BButton>
+            <BButton size="sm" variant="outline-primary" @click="openModal(item)" class="d-flex align-items-center gap-1">
+              <PencilIcon :size="14" /> Edit
+            </BButton>
+            <BButton size="sm" variant="outline-danger" @click="deleteBill(item.id)" class="d-flex align-items-center">
+              <Trash2Icon :size="14" />
+            </BButton>
           </div>
         </template>
       </BTable>
@@ -124,6 +152,12 @@
 </template>
 
 <script setup>
+import { 
+  LightbulbIcon, ZapIcon, DropletsIcon, FlameIcon, GlobeIcon, 
+  SmartphoneIcon, CreditCardIcon, ShieldCheckIcon, LandmarkIcon, 
+  ClipboardListIcon, AlertTriangleIcon, CheckCircleIcon, ClockIcon, Trash2Icon,
+  PlusIcon, PencilIcon
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ middleware: 'auth' })
@@ -149,24 +183,18 @@ const tableFields = [
 ]
 
 const categoryOptions = [
-  { value: 'electricity', text: '⚡ Electricity' },
-  { value: 'water', text: '💧 Water' },
-  { value: 'gas', text: '🔥 Gas / LPG' },
-  { value: 'internet', text: '🌐 Internet / Broadband' },
-  { value: 'phone', text: '📱 Phone / Mobile' },
-  { value: 'credit_card', text: '💳 Credit Card' },
-  { value: 'insurance', text: '🛡️ Insurance Premium' },
-  { value: 'emi', text: '🏦 EMI / Loan' },
-  { value: 'other', text: '📋 Other' },
+  { value: 'electricity', text: 'Electricity', icon: ZapIcon, color: 'text-warning' },
+  { value: 'water', text: 'Water', icon: DropletsIcon, color: 'text-info' },
+  { value: 'gas', text: 'Gas / LPG', icon: FlameIcon, color: 'text-danger' },
+  { value: 'internet', text: 'Internet / Broadband', icon: GlobeIcon, color: 'text-primary' },
+  { value: 'phone', text: 'Phone / Mobile', icon: SmartphoneIcon, color: 'text-success' },
+  { value: 'credit_card', text: 'Credit Card', icon: CreditCardIcon, color: 'text-dark' },
+  { value: 'insurance', text: 'Insurance Premium', icon: ShieldCheckIcon, color: 'text-primary' },
+  { value: 'emi', text: 'EMI / Loan', icon: LandmarkIcon, color: 'text-secondary' },
+  { value: 'other', text: 'Other', icon: ClipboardListIcon, color: 'text-muted' },
 ]
 
-const categoryIcons = {
-  electricity: '⚡', water: '💧', gas: '🔥', internet: '🌐',
-  phone: '📱', credit_card: '💳', insurance: '🛡️', emi: '🏦', other: '📋'
-}
-
-function categoryIcon(cat) { return categoryIcons[cat] || '📋' }
-function categoryLabel(cat) { return categoryOptions.find(o => o.value === cat)?.text?.split(' ').slice(1).join(' ') || cat }
+function getCategory(val) { return categoryOptions.find(o => o.value === val) || categoryOptions[8] }
 
 function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd']

@@ -1,27 +1,40 @@
 <template>
   <BContainer class="py-5">
     <BRow class="mb-4 align-items-center">
-      <BCol md="7" class="mb-3 mb-md-0">
-        <h1 class="fw-bold mb-0">📋 Notes & To-Dos</h1>
-        <p class="text-muted mb-0">Quick notes, pinned items, and to-do lists</p>
+      <BCol md="7" class="mb-3 mb-md-0 d-flex align-items-center">
+        <ClipboardListIcon :size="32" class="text-primary me-3" />
+        <div>
+          <h1 class="fw-bold mb-0">Notes & To-Dos</h1>
+          <p class="text-muted mb-0">Quick notes, pinned items, and to-do lists</p>
+        </div>
       </BCol>
       <BCol md="5" class="text-md-end d-flex gap-2 justify-content-md-end">
-        <BButton variant="outline-primary" @click="openModal('note')" class="fw-semibold flex-grow-1 flex-md-grow-0">📝 Note</BButton>
-        <BButton variant="primary" @click="openModal('todo')" class="fw-semibold flex-grow-1 flex-md-grow-0">✅ To-Do</BButton>
+        <BButton variant="outline-primary" @click="openModal('note')" class="fw-semibold flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center gap-2">
+          <FileEditIcon :size="16" /> Note
+        </BButton>
+        <BButton variant="primary" @click="openModal('todo')" class="fw-semibold flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center gap-2">
+          <CheckIcon :size="16" /> To-Do
+        </BButton>
       </BCol>
     </BRow>
 
     <!-- Filter Tabs -->
     <BNav pills class="mb-4 gap-2">
       <BNavItem :active="filter === 'all'"  @click="filter = 'all'">All</BNavItem>
-      <BNavItem :active="filter === 'note'" @click="filter = 'note'">📝 Notes</BNavItem>
-      <BNavItem :active="filter === 'todo'" @click="filter = 'todo'">✅ To-Dos</BNavItem>
+      <BNavItem :active="filter === 'note'" @click="filter = 'note'" class="d-flex align-items-center gap-1">
+        <FileEditIcon :size="14" /> Notes
+      </BNavItem>
+      <BNavItem :active="filter === 'todo'" @click="filter = 'todo'" class="d-flex align-items-center gap-1">
+        <CheckIcon :size="14" /> To-Dos
+      </BNavItem>
     </BNav>
 
     <div v-if="loading" class="text-center py-5"><BSpinner variant="primary" /></div>
 
     <div v-else-if="filtered.length === 0" class="text-center py-5">
-      <div class="display-1 mb-2">📋</div>
+      <div class="mb-3 text-muted opacity-50">
+        <ClipboardListIcon :size="64" class="mx-auto" />
+      </div>
       <h4 class="fw-bold">Nothing here yet</h4>
       <p class="text-muted">Add your first note or to-do.</p>
     </div>
@@ -33,17 +46,24 @@
           :style="note.color ? `background:${note.color}` : ''">
           <div class="d-flex justify-content-between align-items-start mb-2">
             <div class="d-flex align-items-center gap-2">
-              <BBadge :variant="note.type === 'todo' ? 'success' : 'primary'" class="small">
-                {{ note.type === 'todo' ? '✅ To-Do' : '📝 Note' }}
+              <BBadge :variant="note.type === 'todo' ? 'success' : 'primary'" class="small d-flex align-items-center gap-1">
+                <CheckIcon v-if="note.type === 'todo'" :size="10" />
+                <FileEditIcon v-else :size="10" />
+                {{ note.type === 'todo' ? 'To-Do' : 'Note' }}
               </BBadge>
-              <span v-if="note.is_pinned" title="Pinned">📌</span>
+              <PinIcon v-if="note.is_pinned" :size="14" class="text-primary" />
             </div>
             <div class="d-flex gap-1">
               <BButton size="sm" variant="link" class="p-0 text-muted" @click="togglePin(note)">
-                {{ note.is_pinned ? '📌' : '🔲' }}
+                <PinIcon v-if="note.is_pinned" :size="18" class="text-primary" />
+                <SquareIcon v-else :size="18" />
               </BButton>
-              <BButton size="sm" variant="link" class="p-0 text-muted" @click="openEdit(note)">✏️</BButton>
-              <BButton size="sm" variant="link" class="p-0 text-danger" @click="deleteNote(note.id)">🗑</BButton>
+              <BButton size="sm" variant="link" class="p-0 text-muted" @click="openEdit(note)">
+                <PencilIcon :size="18" />
+              </BButton>
+              <BButton size="sm" variant="link" class="p-0 text-danger" @click="deleteNote(note.id)">
+                <Trash2Icon :size="18" />
+              </BButton>
             </div>
           </div>
 
@@ -58,14 +78,25 @@
           <h5 v-else class="fw-bold mb-2">{{ note.title }}</h5>
 
           <p v-if="note.content" class="text-muted small mb-2 note-content">{{ note.content }}</p>
-          <small class="text-muted">{{ note.created_at }}</small>
+          <small class="text-muted d-flex align-items-center gap-1">
+            <ClockIcon :size="12" /> {{ note.created_at }}
+          </small>
         </BCard>
       </BCol>
     </BRow>
 
     <!-- Add/Edit Modal -->
-    <BModal v-model="showModal" :title="editingId ? 'Edit' : (formType === 'todo' ? '✅ New To-Do' : '📝 New Note')"
-      ok-title="Save" @ok.prevent="saveNote">
+    <BModal v-model="showModal" :ok-title="editingId ? 'Save' : 'Create'" @ok.prevent="saveNote">
+      <template #title>
+        <div class="d-flex align-items-center gap-2">
+          <template v-if="editingId">
+            <PencilIcon :size="20" /> Edit {{ formType === 'todo' ? 'To-Do' : 'Note' }}
+          </template>
+          <template v-else>
+             <PlusIcon :size="20" /> New {{ formType === 'todo' ? 'To-Do' : 'Note' }}
+          </template>
+        </div>
+      </template>
       <BAlert v-if="formError" variant="danger" show>{{ formError }}</BAlert>
       <BForm>
         <BFormGroup label="Title" class="mb-3 fw-semibold">
@@ -75,14 +106,16 @@
           <BFormTextarea v-model="form.content" rows="4" placeholder="Details..." />
         </BFormGroup>
         <BFormGroup label="Card Color (optional)" class="mb-3 fw-semibold">
-          <div class="d-flex gap-2 flex-wrap">
+          <div class="d-flex gap-2 flex-wrap align-items-center">
             <span v-for="c in colorOptions" :key="c"
               @click="form.color = c"
               class="color-dot rounded-circle border"
-              :style="`background:${c};width:28px;height:28px;cursor:pointer;${form.color === c ? 'outline:3px solid #0d6efd' : ''}`">
+              :style="`background:${c};width:28px;height:28px;cursor:pointer;${form.color === c ? 'outline:2px solid #0d6efd; outline-offset: 2px;' : ''}`">
             </span>
-            <span @click="form.color = null" class="color-dot rounded-circle border bg-white"
-              style="width:28px;height:28px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;">✕</span>
+            <span @click="form.color = null" class="color-dot rounded-circle border bg-white d-flex align-items-center justify-content-center"
+              style="width:28px;height:28px;cursor:pointer;">
+              <XIcon :size="14" class="text-muted" />
+            </span>
           </div>
         </BFormGroup>
       </BForm>
@@ -91,6 +124,10 @@
 </template>
 
 <script setup>
+import { 
+  ClipboardListIcon, FileEditIcon, CheckIcon, PlusIcon, 
+  PinIcon, SquareIcon, PencilIcon, Trash2Icon, XIcon, PlusCircleIcon
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ middleware: 'auth' })

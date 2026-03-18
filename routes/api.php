@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\UserBlocksController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ChatSettingsController;
 
 Route::post('/register', [AuthController::class , 'register']);
 Route::post('/login', [AuthController::class , 'login']);
@@ -34,6 +35,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/messages/{messageId}', [MessagesController::class , 'deleteMessage']);
     Route::get('/messages/link-metadata', [MessagesController::class , 'getLinkMetadata']);
     Route::post('/logout', [AuthController::class , 'logout']);
+
+    // Chat Settings Toggles
+    Route::post('/chat/settings/archive', [ChatSettingsController::class, 'toggleArchive']);
+    Route::post('/chat/settings/favourite', [ChatSettingsController::class, 'toggleFavourite']);
+    Route::post('/chat/settings/unread', [ChatSettingsController::class, 'toggleUnread']);
 
     // Profile
     Route::get('/profile', [ProfileController::class , 'show']);

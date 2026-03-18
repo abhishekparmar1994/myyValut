@@ -2,102 +2,106 @@
   <BContainer class="py-5">
     <!-- Header -->
     <BRow class="mb-4 align-items-center">
-      <BCol md="8" class="mb-3 mb-md-0">
-        <h1 class="fw-bold mb-0">My Reminders</h1>
-        <p class="text-muted mb-0">Manage your personal reminders and alerts</p>
+      <BCol md="8" class="mb-3 mb-md-0 d-flex align-items-center">
+        <BellIcon :size="32" class="text-primary me-3" />
+        <div>
+          <h1 class="fw-bold mb-0">Reminders</h1>
+          <p class="text-muted mb-0">Never forget important dates and tasks</p>
+        </div>
       </BCol>
       <BCol md="4" class="text-md-end">
-        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto">
-          + Add Reminder
+        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto d-flex align-items-center justify-content-center gap-2">
+          <PlusIcon :size="18" /> Add Reminder
         </BButton>
       </BCol>
     </BRow>
 
-    <!-- Loading -->
-    <div v-if="loading" class="text-center py-5">
-      <BSpinner variant="primary" /> <span class="ms-2 text-muted">Loading reminders...</span>
-    </div>
-
     <!-- Empty State -->
-    <BCard v-else-if="reminders.length === 0" class="text-center py-5 border-0 shadow-sm">
-      <div class="display-1 mb-3">🔔</div>
-      <h3 class="fw-bold">No Reminders Yet</h3>
-      <p class="text-muted">Add a birthday, anniversary, or recharge reminder to get started.</p>
-      <BButton variant="primary" @click="openModal()">Add Your First Reminder</BButton>
+    <BCard v-if="!loading && reminders.length === 0" class="text-center py-5 border-0 shadow-sm">
+      <div class="mb-3 text-muted opacity-50">
+        <BellIcon :size="64" class="mx-auto" />
+      </div>
+      <h4 class="fw-bold">No reminders set</h4>
+      <p class="text-muted">Add important dates like birthdays or recharge due dates.</p>
+      <BButton variant="primary" @click="openModal()" class="d-inline-flex align-items-center gap-2">
+        <PlusIcon :size="18" /> Set New Reminder
+      </BButton>
     </BCard>
 
     <!-- Reminders Table -->
-    <BCard v-else class="shadow-sm border-0">
-      <BTable
-        :items="reminders"
-        :fields="tableFields"
-        hover
-        responsive
-        class="mb-0"
-      >
+    <BCard v-else class="border-0 shadow-sm overflow-hidden">
+      <div v-if="loading" class="text-center py-4"><BSpinner variant="primary" /></div>
+      <BTable v-else :items="reminders" :fields="tableFields" responsive hover class="mb-0">
         <template #cell(type)="{ item }">
-          <BBadge :variant="typeBadge(item.type).variant" class="px-3 py-2">
-            {{ typeBadge(item.type).icon }} {{ item.type.charAt(0).toUpperCase() + item.type.slice(1) }}
+          <BBadge :variant="getReminder(item.type).badge" class="px-2 py-1 d-inline-flex align-items-center gap-2">
+            <component :is="getReminder(item.type).icon" :size="14" />
+            {{ getReminder(item.type).text }}
           </BBadge>
         </template>
-
-        <template #cell(reminder_date)="{ item }">
-          {{ formatDate(item.reminder_date) }}
-          <span class="text-muted small ms-1">({{ item.repeat_yearly ? 'Yearly' : 'Once' }})</span>
-        </template>
-
-        <template #cell(days_remaining)="{ item }">
-          <BBadge
-            :variant="item.days_remaining <= 3 ? 'danger' : item.days_remaining <= 7 ? 'warning' : 'success'"
-            class="px-2 py-1"
-          >
-            {{ item.days_remaining === 0 ? 'Today!' : `${item.days_remaining} days` }}
-          </BBadge>
+        
+        <template #cell(next_date)="{ item }">
+          <div class="fw-semibold">{{ formatDate(item.next_date) }}</div>
+          <small v-if="item.days_left !== null" :class="item.days_left <= 7 ? 'text-danger fw-bold' : 'text-muted'">
+            {{ item.days_left === 0 ? 'Today!' : `${item.days_left} days left` }}
+          </small>
         </template>
 
         <template #cell(actions)="{ item }">
           <div class="d-flex gap-2">
-            <BButton size="sm" variant="outline-primary" @click="openModal(item)">Edit</BButton>
-            <BButton size="sm" variant="outline-danger" @click="deleteReminder(item.id)">Delete</BButton>
+            <BButton size="sm" variant="outline-primary" @click="openModal(item)" class="p-1 px-2">
+              <PencilIcon :size="14" />
+            </BButton>
+            <BButton size="sm" variant="outline-danger" @click="deleteReminder(item.id)" class="p-1 px-2">
+               <Trash2Icon :size="14" />
+            </BButton>
           </div>
         </template>
       </BTable>
     </BCard>
 
-    <!-- Add/Edit Modal -->
-    <BModal v-model="showModal" :title="editingId ? 'Edit Reminder' : 'Add Reminder'" @ok="saveReminder" ok-title="Save" cancel-title="Cancel">
+    <!-- Add/Edit Modal (Standard BootstrapVueNext) -->
+    <BModal v-model="showModal" :title="editingId ? 'Edit Reminder' : 'Add Reminder'" 
+      ok-title="Save" @ok.prevent="saveReminder">
       <BForm>
-        <BFormGroup label="Title" class="mb-3 fw-semibold">
+        <BFormGroup label="Label / Message" class="mb-3 fw-semibold">
           <BFormInput v-model="form.title" placeholder="e.g. Mom's Birthday" required />
         </BFormGroup>
+        
+        <BRow>
+          <BCol md="6">
+            <BFormGroup label="Type" class="mb-3 fw-semibold">
+              <BFormSelect v-model="form.type" :options="typeOptions" required />
+            </BFormGroup>
+          </BCol>
+          <BCol md="6">
+            <BFormGroup label="Date" class="mb-3 fw-semibold">
+              <BFormInput v-model="form.date" type="date" required />
+            </BFormGroup>
+          </BCol>
+        </BRow>
 
-        <BFormGroup label="Type" class="mb-3 fw-semibold">
-          <BFormSelect v-model="form.type" :options="typeOptions" required />
-        </BFormGroup>
-
-        <!-- Mobile Number: only shown for recharge type -->
-        <BFormGroup v-if="form.type === 'recharge'" label="Mobile Number" class="mb-3 fw-semibold">
-          <BFormInput v-model="form.mobile_number" type="tel" placeholder="e.g. 9876543210" />
-          <div class="form-text">Add separate reminders for each number.</div>
-        </BFormGroup>
-
-        <BFormGroup label="Date" class="mb-3 fw-semibold">
-          <BFormInput v-model="form.reminder_date" type="date" required />
-        </BFormGroup>
-
-        <BFormGroup label="Repeat" class="mb-3 fw-semibold">
-          <BFormSelect v-model="form.repeat_type" :options="repeatOptions" />
-        </BFormGroup>
-
-        <BFormGroup label="Notes (optional)" class="mb-3 fw-semibold">
-          <BFormTextarea v-model="form.notes" rows="2" placeholder="Any additional notes..." />
-        </BFormGroup>
+        <BRow>
+          <BCol md="6">
+            <BFormGroup label="Time" class="mb-3 fw-semibold">
+              <BFormInput v-model="form.time" type="time" />
+            </BFormGroup>
+          </BCol>
+          <BCol md="6">
+            <BFormGroup label="Frequency" class="mb-3 fw-semibold">
+              <BFormSelect v-model="form.frequency" :options="freqOptions" />
+            </BFormGroup>
+          </BCol>
+        </BRow>
       </BForm>
     </BModal>
   </BContainer>
 </template>
 
 <script setup>
+import { 
+  BellIcon, PlusIcon, CakeIcon, GemIcon, 
+  SmartphoneIcon, CalendarIcon, Trash2Icon, PencilIcon 
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ middleware: 'auth' })
@@ -112,51 +116,30 @@ const showModal = ref(false)
 const editingId = ref(null)
 
 const form = reactive({
-  title: '',
-  type: 'birthday',
-  reminder_date: '',
-  repeat_type: 'yearly',
-  mobile_number: '',
-  notes: ''
+  title: '', type: 'event', date: '', time: '09:00', frequency: 'once'
 })
-
-const tableFields = [
-  { key: 'title', label: 'Title' },
-  { key: 'type', label: 'Type' },
-  { key: 'mobile_number', label: 'Mobile No.' },
-  { key: 'reminder_date', label: 'Date' },
-  { key: 'days_remaining', label: 'Days Left' },
-  { key: 'notes', label: 'Notes' },
-  { key: 'actions', label: 'Actions' }
-]
 
 const typeOptions = [
-  { value: 'birthday', text: '🎂 Birthday' },
-  { value: 'anniversary', text: '💍 Anniversary' },
-  { value: 'recharge', text: '📱 Mobile Recharge' },
-  { value: 'custom', text: '📅 Custom' }
+  { value: 'birthday',    text: 'Birthday', icon: CakeIcon, badge: 'primary' },
+  { value: 'anniversary', text: 'Anniversary', icon: GemIcon, badge: 'danger' },
+  { value: 'recharge',    text: 'Recharge', icon: SmartphoneIcon, badge: 'success' },
+  { value: 'event',       text: 'Event', icon: CalendarIcon, badge: 'info' },
 ]
 
-const repeatOptions = computed(() => {
-  const opts = [
-    { value: 'none', text: 'No repeat (once)' },
-    { value: 'yearly', text: 'Every year' },
-  ]
-  if (form.type === 'recharge') {
-    opts.splice(1, 0, { value: 'monthly', text: 'Every month' })
-  }
-  return opts
-})
+function getReminder(val) { return typeOptions.find(o => o.value === val) || typeOptions[3] }
 
-function typeBadge(type) {
-  const map = {
-    birthday: { variant: 'danger', icon: '🎂' },
-    anniversary: { variant: 'warning', icon: '💍' },
-    recharge: { variant: 'success', icon: '📱' },
-    custom: { variant: 'info', icon: '📅' }
-  }
-  return map[type] || { variant: 'secondary', icon: '📌' }
-}
+const freqOptions = [
+  { value: 'once', text: 'Once' },
+  { value: 'yearly', text: 'Yearly' },
+  { value: 'monthly', text: 'Monthly' },
+]
+
+const tableFields = [
+  { key: 'title', label: 'Reminder', sortable: true },
+  { key: 'type', label: 'Type' },
+  { key: 'next_date', label: 'Next Due', sortable: true },
+  { key: 'actions', label: 'Actions' },
+]
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -169,8 +152,7 @@ function authHeaders() {
 async function fetchReminders() {
   loading.value = true
   try {
-    const data = await $fetch(`${config.public.apiBase}/reminders`, { headers: authHeaders() })
-    reminders.value = data
+    reminders.value = await $fetch(`${config.public.apiBase}/reminders`, { headers: authHeaders() })
   } catch (e) {
     console.error(e)
   } finally {
@@ -183,18 +165,12 @@ function openModal(item = null) {
     editingId.value = item.id
     form.title = item.title
     form.type = item.type
-    form.reminder_date = item.reminder_date
-    form.repeat_type = item.repeat_type || 'yearly'
-    form.mobile_number = item.mobile_number || ''
-    form.notes = item.notes || ''
+    form.date = item.date
+    form.time = item.time || '09:00'
+    form.frequency = item.frequency
   } else {
     editingId.value = null
-    form.title = ''
-    form.type = 'birthday'
-    form.reminder_date = ''
-    form.repeat_type = 'yearly'
-    form.mobile_number = ''
-    form.notes = ''
+    form.title = ''; form.type = 'event'; form.date = ''; form.time = '09:00'; form.frequency = 'once'
   }
   showModal.value = true
 }

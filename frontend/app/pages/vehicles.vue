@@ -1,57 +1,87 @@
 <template>
   <BContainer class="py-5">
     <BRow class="mb-4 align-items-center">
-      <BCol md="8" class="mb-3 mb-md-0">
-        <h1 class="fw-bold mb-0">🚗 Vehicle Tracker</h1>
-        <p class="text-muted mb-0">Track insurance, PUC, and service reminders for your vehicles</p>
+      <BCol md="8" class="mb-3 mb-md-0 d-flex align-items-center">
+        <CarIcon :size="32" class="text-primary me-3" />
+        <div>
+          <h1 class="fw-bold mb-0">Vehicle Tracker</h1>
+          <p class="text-muted mb-0">Track insurance, PUC, and service reminders for your vehicles</p>
+        </div>
       </BCol>
       <BCol md="4" class="text-md-end">
-        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto">+ Add Vehicle</BButton>
+        <BButton variant="primary" @click="openModal()" class="fw-bold px-4 w-100 w-md-auto d-flex align-items-center justify-content-center gap-2">
+          <PlusIcon :size="18" /> Add Vehicle
+        </BButton>
       </BCol>
     </BRow>
 
     <div v-if="loading" class="text-center py-5"><BSpinner variant="primary" /></div>
 
     <div v-else-if="vehicles.length === 0" class="text-center py-5">
-      <div class="display-1 mb-2">🚗</div>
+      <div class="mb-3 text-muted opacity-50">
+        <CarIcon :size="64" class="mx-auto" />
+      </div>
       <h4 class="fw-bold">No vehicles added yet</h4>
       <p class="text-muted">Add your car or bike to track insurance, PUC & service dates.</p>
-      <BButton variant="primary" @click="openModal()">+ Add Vehicle</BButton>
+      <BButton variant="primary" @click="openModal()" class="d-inline-flex align-items-center gap-2">
+        <PlusIcon :size="18" /> Add Vehicle
+      </BButton>
     </div>
 
     <BRow v-else>
       <BCol v-for="v in vehicles" :key="v.id" md="6" lg="4" class="mb-4">
         <BCard class="h-100 shadow-sm border-0 vehicle-card">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
-              <span class="fs-2 me-2">{{ typeIcon(v.type) }}</span>
-              <span class="fw-bold fs-5">{{ v.name }}</span>
+            <div class="d-flex align-items-center gap-2">
+              <div class="p-2 rounded bg-primary bg-opacity-10">
+                <component :is="getType(v.type).icon" :size="24" class="text-primary" />
+              </div>
+              <span class="fw-bold fs-5 text-main">{{ v.name }}</span>
             </div>
             <div class="d-flex gap-2">
-              <BButton size="sm" variant="outline-primary" @click="openModal(v)">Edit</BButton>
-              <BButton size="sm" variant="outline-danger" @click="deleteVehicle(v.id)">🗑</BButton>
+              <BButton size="sm" variant="outline-primary" @click="openModal(v)" class="p-1 px-2">
+                <PencilIcon :size="14" />
+              </BButton>
+              <BButton size="sm" variant="outline-danger" @click="deleteVehicle(v.id)" class="p-1 px-2">
+                <Trash2Icon :size="14" />
+              </BButton>
             </div>
           </div>
 
-          <p v-if="v.registration_number" class="text-muted small mb-3">
-            🔢 {{ v.registration_number }}
+          <p v-if="v.registration_number" class="text-muted small mb-3 d-flex align-items-center gap-1">
+            <HashIcon :size="14" /> {{ v.registration_number }}
           </p>
 
           <div class="d-flex flex-column gap-2">
             <div class="d-flex justify-content-between align-items-center p-2 rounded"
               :class="expiryClass(v.insurance_days)">
-              <span class="small fw-semibold">🛡️ Insurance</span>
-              <span class="small fw-bold">{{ expiryLabel(v.insurance_days, v.insurance_expiry) }}</span>
+              <span class="small fw-semibold d-flex align-items-center gap-1">
+                <ShieldCheckIcon :size="14" /> Insurance
+              </span>
+              <span class="small fw-bold d-flex align-items-center gap-1">
+                <component :is="expiryIcon(v.insurance_days)" :size="12" />
+                {{ expiryLabel(v.insurance_days, v.insurance_expiry) }}
+              </span>
             </div>
             <div class="d-flex justify-content-between align-items-center p-2 rounded"
               :class="expiryClass(v.puc_days)">
-              <span class="small fw-semibold">🌿 PUC</span>
-              <span class="small fw-bold">{{ expiryLabel(v.puc_days, v.puc_expiry) }}</span>
+              <span class="small fw-semibold d-flex align-items-center gap-1">
+                <LeafIcon :size="14" /> PUC
+              </span>
+              <span class="small fw-bold d-flex align-items-center gap-1">
+                <component :is="expiryIcon(v.puc_days)" :size="12" />
+                {{ expiryLabel(v.puc_days, v.puc_expiry) }}
+              </span>
             </div>
             <div class="d-flex justify-content-between align-items-center p-2 rounded"
               :class="expiryClass(v.service_days, 30)">
-              <span class="small fw-semibold">🔧 Service</span>
-              <span class="small fw-bold">{{ expiryLabel(v.service_days, v.next_service_date) }}</span>
+              <span class="small fw-semibold d-flex align-items-center gap-1">
+                <WrenchIcon :size="14" /> Service
+              </span>
+              <span class="small fw-bold d-flex align-items-center gap-1">
+                <component :is="expiryIcon(v.service_days, 30)" :size="12" />
+                {{ expiryLabel(v.service_days, v.next_service_date) }}
+              </span>
             </div>
           </div>
 
@@ -115,6 +145,11 @@
 </template>
 
 <script setup>
+import { 
+  CarIcon, BikeIcon, TruckIcon, HashIcon, 
+  ShieldCheckIcon, LeafIcon, WrenchIcon, AlertTriangleIcon, 
+  ClockIcon, CheckCircleIcon, Trash2Icon, PlusIcon, PencilIcon
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ middleware: 'auth' })
@@ -136,31 +171,37 @@ const form = reactive({
 })
 
 const typeOptions = [
-  { value: 'car',    text: '🚗 Car' },
-  { value: 'bike',   text: '🏍️ Bike' },
-  { value: 'scooter', text: '🛵 Scooter' },
-  { value: 'truck',  text: '🚛 Truck' },
-  { value: 'auto',   text: '🛺 Auto' },
-  { value: 'other',  text: '🚌 Other' },
+  { value: 'car',     text: 'Car', icon: CarIcon },
+  { value: 'bike',    text: 'Bike', icon: BikeIcon },
+  { value: 'scooter', text: 'Scooter', icon: BikeIcon },
+  { value: 'truck',   text: 'Truck', icon: TruckIcon },
+  { value: 'auto',    text: 'Auto', icon: CarIcon },
+  { value: 'other',   text: 'Other', icon: CarIcon },
 ]
 
-const typeIcons = { car: '🚗', bike: '🏍️', scooter: '🛵', truck: '🚛', auto: '🛺', other: '🚌' }
-function typeIcon(t) { return typeIcons[t] || '🚗' }
+function getType(val) { return typeOptions.find(o => o.value === val) || typeOptions[5] }
 
 function expiryClass(days, threshold = 30) {
   if (days === null || days === undefined) return 'bg-light'
-  if (days < 0)  return 'bg-danger bg-opacity-10 border border-danger'
-  if (days <= threshold) return 'bg-warning bg-opacity-10 border border-warning'
-  return 'bg-success bg-opacity-10 border border-success'
+  if (days < 0)  return 'bg-danger bg-opacity-10 border border-danger text-danger'
+  if (days <= threshold) return 'bg-warning bg-opacity-10 border border-warning text-warning'
+  return 'bg-success bg-opacity-10 border border-success text-success'
+}
+
+function expiryIcon(days, threshold = 30) {
+  if (days === null || days === undefined) return ClockIcon
+  if (days < 0)  return AlertTriangleIcon
+  if (days <= threshold) return ClockIcon
+  return CheckCircleIcon
 }
 
 function expiryLabel(days, dateStr) {
   if (!dateStr) return '—'
   if (days === null || days === undefined) return dateStr
-  if (days < 0)  return `⚠️ Expired ${Math.abs(days)}d ago`
-  if (days === 0) return '⚠️ Expires Today!'
-  if (days <= 30) return `⏳ ${days}d left`
-  return `✅ ${dateStr}`
+  if (days < 0)  return `Expired ${Math.abs(days)}d ago`
+  if (days === 0) return 'Expires Today!'
+  if (days <= 30) return `${days}d left`
+  return `${dateStr}`
 }
 
 function authHeaders() { return { Authorization: `Bearer ${auth.token}` } }

@@ -148,7 +148,28 @@ class AuthController extends Controller
                     ->latest()
                     ->limit(1)
                 ])
+                ->addSelect(['is_archived' => \App\Models\ChatSetting::select('is_archived')
+                    ->where('user_id', $currentUserId)
+                    ->whereColumn('target_id', 'users.id')
+                    ->limit(1)
+                ])
+                ->addSelect(['is_favourite' => \App\Models\ChatSetting::select('is_favourite')
+                    ->where('user_id', $currentUserId)
+                    ->whereColumn('target_id', 'users.id')
+                    ->limit(1)
+                ])
+                ->addSelect(['is_unread_manual' => \App\Models\ChatSetting::select('is_unread_manual')
+                    ->where('user_id', $currentUserId)
+                    ->whereColumn('target_id', 'users.id')
+                    ->limit(1)
+                ])
                 ->get()
+                ->map(function($user) {
+                    $user->is_archived = (bool)$user->is_archived;
+                    $user->is_favourite = (bool)$user->is_favourite;
+                    $user->is_unread_manual = (bool)$user->is_unread_manual;
+                    return $user;
+                })
         );
     }
 }

@@ -19,7 +19,7 @@ class Room extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'room_members')
-            ->withPivot('role', 'last_read_at')
+            ->withPivot('role', 'last_read_at', 'is_archived', 'is_favourite', 'is_unread_manual')
             ->withTimestamps();
     }
 

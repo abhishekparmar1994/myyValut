@@ -1,56 +1,70 @@
 <template>
-  <BContainer class="py-5">
+  <div class="landing-page position-relative overflow-hidden">
     <!-- Hero Section -->
-    <BRow class="align-items-center mb-5 py-5">
-      <BCol lg="6" class="mb-4 mb-lg-0">
-        <h1 class="display-3 fw-black text-dark mb-4 leading-tight">
-          Your Portal to <span class="text-primary">Public Services</span>
-        </h1>
-        <p class="lead text-secondary mb-5">
-          Access all government utilities, track service requests, and manage your citizen profile through our secure and unified platform.
-        </p>
-        <div class="d-flex flex-column flex-sm-row gap-3">
-          <BButton as="NuxtLink" to="/register" variant="primary" size="lg" class="px-5 shadow-sm">Get Started</BButton>
-          <BButton as="NuxtLink" to="/login" variant="outline-primary" size="lg" class="px-5">Member Login</BButton>
-        </div>
-      </BCol>
-      <BCol lg="6" class="text-center">
-        <div class="p-5 rounded-4 bg-primary bg-opacity-10">
-          <h2 class="h4 fw-bold text-primary mb-3 text-uppercase tracking-wider">Secure & Trusted</h2>
-          <p class="text-muted">Join over 1,000,000 citizens using GovUtility for their daily administrative needs.</p>
-        </div>
-      </BCol>
-    </BRow>
+    <BContainer class="py-5 text-center min-vh-75 d-flex flex-column justify-content-center pt-5">
+      <BRow class="justify-content-center">
+        <BCol lg="8" class="pt-5 mt-5">
+          <BBadge variant="primary" class="mb-3 px-3 py-2 rounded-pill fw-bold animate-fadeInDown">
+             <LayoutDashboardIcon :size="14" class="me-1" /> All-in-one Management
+          </BBadge>
+          <h1 class="display-3 fw-black text-main mb-4 animate-scaleUp">
+            The Ultimate <span class="text-primary text-gradient">Utility</span> Hub
+          </h1>
+          <p class="lead text-muted mb-5 animate-fadeInUp">
+            Organize your life with our comprehensive suite of tools for managing<br class="d-none d-md-block">
+            medical, financial, and personal documentation.
+          </p>
+          <div class="d-flex flex-wrap justify-content-center gap-3 mb-5">
+            <BButton to="/register" variant="primary" size="lg" class="fw-bold px-5 py-3 shadow-lg d-flex align-items-center gap-2">
+              Get Started <ArrowRightIcon :size="20" />
+            </BButton>
+            <BButton variant="outline-dark" size="lg" class="fw-bold px-5 py-3 d-flex align-items-center gap-2">
+               Learn More <LayoutDashboardIcon :size="20" />
+            </BButton>
+          </div>
+        </BCol>
+      </BRow>
 
-    <!-- Features Section -->
-    <BRow class="pt-5">
-      <BCol md="4" class="mb-4" v-for="feature in features" :key="feature.title">
-        <BCard class="h-100 shadow-sm hover-shadow transition">
-          <div class="mb-4 text-primary h1">{{ feature.icon }}</div>
-          <h3 class="h4 fw-bold mb-3">{{ feature.title }}</h3>
-          <p class="text-muted small">{{ feature.desc }}</p>
-        </BCard>
-      </BCol>
-    </BRow>
-  </BContainer>
+      <!-- Features Grid -->
+      <BRow class="mt-5 pt-5 gx-4 gy-4">
+        <BCol md="4" v-for="f in features" :key="f.title">
+          <BCard class="border-0 shadow-sm h-100 hover-lift rounded-4 p-3 text-center">
+            <div :class="`feature-icon-wrapper rounded-circle p-3 mx-auto mb-4 bg-${f.color} bg-opacity-10`" style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center;">
+              <component :is="f.icon" :size="32" :class="`text-${f.color}`" />
+            </div>
+            <h4 class="fw-bold text-main mb-3">{{ f.title }}</h4>
+            <p class="text-muted small mb-0">{{ f.desc }}</p>
+          </BCard>
+        </BCol>
+      </BRow>
+    </BContainer>
+  </div>
 </template>
 
 <script setup>
+import { 
+  ShieldCheckIcon, ZapIcon, MonitorIcon, 
+  ArrowRightIcon, LayoutDashboardIcon 
+} from 'lucide-vue-next'
+
 const features = [
-  {
-    title: 'Secure Access',
-    desc: 'Our platform uses high-level encryption to ensure your personal data is protected and accessible only to you.',
-    icon: '🛡️'
+  { 
+    title: "Secure Vault", 
+    desc: "Your data is encrypted and saved securely. We never share your sensitive information.", 
+    icon: ShieldCheckIcon, 
+    color: 'primary' 
   },
-  {
-    title: 'Instant Updates',
-    desc: 'Receive real-time notifications on the status of your requests and official government announcements.',
-    icon: '⚡'
+  { 
+    title: "Instant Sync", 
+    desc: "Access your dashboard across all devices instantly with cloud synchronization.", 
+    icon: ZapIcon, 
+    color: 'warning' 
   },
-  {
-    title: 'Digital Services',
-    desc: 'From tax payments to license renewals, everything you need is available in a few clicks.',
-    icon: '💻'
+  { 
+    title: "Modern Interface", 
+    desc: "A clean, intuitive, and high-performance UI designed for maximum productivity.", 
+    icon: MonitorIcon, 
+    color: 'info' 
   }
 ]
 </script>
@@ -63,4 +77,19 @@ const features = [
   transform: translateY(-5px);
   box-shadow: 0 1rem 3rem rgba(0,0,0,.175) !important;
 }
+.text-main { color: #2c3338; }
+.text-gradient {
+  background: linear-gradient(135deg, #0d6efd 30%, #6610f2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hover-lift {
+  transition: all 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important;
+}
+.animate-scaleUp { animation: scaleUp 0.8s ease backwards; }
+@keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } }
 </style>

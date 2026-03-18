@@ -1,9 +1,9 @@
 <template>
-  <BContainer class="py-5">
+  <BContainer fluid class="px-md-5 py-5">
     <!-- Header Section -->
     <BRow class="mb-5 align-items-center animate-fadeIn">
       <BCol>
-        <h1 class="fw-black text-main mb-1">
+        <h1 class="fw-black text-main mb-1 text-uppercase tracking-tight">
           Welcome back, <span class="text-primary">{{ auth.user?.name }}</span>
         </h1>
         <p class="text-muted lead">Your personal dashboard — documents, reminders, and more.</p>
@@ -13,20 +13,28 @@
     <!-- Upcoming Reminders Panel (top) -->
     <BRow class="mb-4">
       <BCol>
-        <BCard class="border-0 shadow-sm">
+        <BCard class="border-0 shadow-sm overflow-hidden">
           <template #header>
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center py-1">
-              <h3 class="h6 fw-bold mb-2 mb-md-0">⚠️ Upcoming Alerts <span class="text-muted fw-normal">(next 7 days)</span></h3>
-              <span class="text-muted small">Reminders · Bills · Vehicles · Medicines</span>
+              <h3 class="h6 fw-bold mb-2 mb-md-0 d-flex align-items-center gap-2 text-uppercase">
+                <AlertTriangleIcon v-if="upcomingAlerts.length > 0" size="18" class="text-warning" />
+                <span>Upcoming Alerts</span>
+                <span class="text-muted fw-normal ms-1">(next 7 days)</span>
+              </h3>
+              <div class="d-flex align-items-center gap-2 text-muted small">
+                 <BellIcon size="14" />
+                 <span>Reminders · Bills · Vehicles · Medicines</span>
+              </div>
             </div>
           </template>
 
-          <div v-if="loadingReminders" class="text-center py-2">
-            <BSpinner small variant="primary" class="me-2" /> Loading...
+          <div v-if="loadingReminders" class="text-center py-4">
+            <BSpinner variant="primary" class="me-2" /> Loading...
           </div>
 
-          <div v-else-if="upcomingAlerts.length === 0" class="d-flex align-items-center gap-3 py-1">
-            <span class="text-muted small">🎉 Nothing urgent in the next 7 days. All clear!</span>
+          <div v-else-if="upcomingAlerts.length === 0" class="d-flex align-items-center gap-3 py-3 justify-content-center text-muted">
+             <CheckCircleIcon size="20" class="text-success" />
+             <span class="fw-semibold">🎉 Nothing urgent in the next 7 days. All clear!</span>
           </div>
 
           <div v-else class="d-flex flex-wrap gap-3 py-1">
@@ -34,15 +42,17 @@
               v-for="alert in upcomingAlerts"
               :key="alert.key"
               :class="[
-                'd-flex align-items-center gap-2 border rounded px-3 py-2',
-                alert.days === 0 ? 'urgent-reminder' : 'bg-light'
+                'd-flex align-items-center gap-3 border rounded-3 px-3 py-3 position-relative transition-all hover-shadow',
+                alert.days === 0 ? 'urgent-reminder' : 'bg-light hover-bg-white border-light'
               ]"
-              style="min-width: 180px; flex: 1 1 200px; max-width: 100%;"
+              style="min-width: 220px; flex: 1 1 240px;"
             >
-              <span class="fs-5">{{ alert.icon }}</span>
+              <div class="p-2 rounded-circle bg-white text-primary shadow-sm border border-light">
+                 <component :is="alert.iconComp" size="20" />
+              </div>
               <div class="flex-grow-1">
-                <p class="fw-semibold mb-0 small">{{ alert.title }}</p>
-                <p class="text-muted mb-0" style="font-size: 0.72rem;">{{ alert.subtitle }}</p>
+                <p class="fw-bold mb-0 text-main">{{ alert.title }}</p>
+                <p class="text-muted mb-0 xx-small">{{ alert.subtitle }}</p>
               </div>
               <BBadge
                 :variant="alert.days === 0 ? 'danger' : alert.days <= 3 ? 'warning' : 'info'"
@@ -59,8 +69,11 @@
     <!-- Stats Section -->
     <BRow class="mb-5">
       <BCol md="3" sm="6" class="mb-4">
-        <BCard class="text-center shadow-sm h-100 border-0 bg-white">
-          <p class="text-uppercase text-secondary small fw-bold mb-2">Total Documents</p>
+        <BCard class="text-center shadow-sm h-100 border-0 bg-white hover-up overflow-hidden">
+          <div class="p-3 mb-3 bg-primary bg-opacity-10 text-primary rounded-circle d-inline-block mx-auto">
+             <FileTextIcon size="24" />
+          </div>
+          <p class="text-uppercase text-secondary small fw-bold mb-1">Total Documents</p>
           <h2 class="fw-black text-primary mb-0">
             <BSpinner v-if="loadingStats" small />
             <span v-else>{{ stats.documents }}</span>
@@ -68,8 +81,11 @@
         </BCard>
       </BCol>
       <BCol md="3" sm="6" class="mb-4">
-        <BCard class="text-center shadow-sm h-100 border-0 bg-white">
-          <p class="text-uppercase text-secondary small fw-bold mb-2">Total Reminders</p>
+        <BCard class="text-center shadow-sm h-100 border-0 bg-white hover-up overflow-hidden">
+          <div class="p-3 mb-3 bg-warning bg-opacity-10 text-warning rounded-circle d-inline-block mx-auto">
+             <BellIcon size="24" />
+          </div>
+          <p class="text-uppercase text-secondary small fw-bold mb-1">Total Reminders</p>
           <h2 class="fw-black text-primary mb-0">
             <BSpinner v-if="loadingStats" small />
             <span v-else>{{ stats.reminders }}</span>
@@ -77,17 +93,23 @@
         </BCard>
       </BCol>
       <BCol md="3" sm="6" class="mb-4">
-        <BCard class="text-center shadow-sm h-100 border-0 bg-white">
-          <p class="text-uppercase text-secondary small fw-bold mb-2">Due This Week</p>
-          <h2 class="fw-black mb-0" :class="stats.upcoming > 0 ? 'text-warning' : 'text-primary'">
+        <BCard class="text-center shadow-sm h-100 border-0 bg-white hover-up overflow-hidden">
+          <div class="p-3 mb-3 bg-danger bg-opacity-10 text-danger rounded-circle d-inline-block mx-auto">
+             <AlertCircleIcon size="24" />
+          </div>
+          <p class="text-uppercase text-secondary small fw-bold mb-1">Due This Week</p>
+          <h2 class="fw-black mb-0" :class="stats.upcoming > 0 ? 'text-danger' : 'text-primary'">
             <BSpinner v-if="loadingStats" small />
             <span v-else>{{ stats.upcoming }}</span>
           </h2>
         </BCard>
       </BCol>
       <BCol md="3" sm="6" class="mb-4">
-        <BCard class="text-center shadow-sm h-100 border-0 bg-white">
-          <p class="text-uppercase text-secondary small fw-bold mb-2">Activities</p>
+        <BCard class="text-center shadow-sm h-100 border-0 bg-white hover-up overflow-hidden">
+          <div class="p-3 mb-3 bg-success bg-opacity-10 text-success rounded-circle d-inline-block mx-auto">
+             <ActivityIcon size="24" />
+          </div>
+          <p class="text-uppercase text-secondary small fw-bold mb-1">Activities</p>
           <h2 class="fw-black text-primary mb-0">
             <BSpinner v-if="loadingStats" small />
             <span v-else>{{ stats.activities }}</span>
@@ -99,63 +121,112 @@
     <!-- Main Content Section -->
     <BRow>
       <BCol lg="8" class="mb-4">
-        <BCard class="shadow-sm border-0 h-100">
+        <BCard class="shadow-sm border-0 h-100 overflow-hidden">
           <template #header>
             <div class="d-flex justify-content-between align-items-center py-2">
-              <h3 class="h5 fw-bold mb-0">Recent Activity</h3>
+              <h3 class="h5 fw-bold mb-0 d-flex align-items-center gap-2">
+                 <HistoryIcon size="20" class="text-primary" />
+                 <span>Recent Activity</span>
+              </h3>
+              <NuxtLink to="/activities" class="btn btn-sm btn-link text-decoration-none p-0 fw-semibold">View All ›</NuxtLink>
             </div>
           </template>
 
-          <div v-if="loadingActivity" class="text-center py-4">
+          <div v-if="loadingActivity" class="text-center py-5">
             <BSpinner variant="primary" small class="me-2" /> Loading activity...
           </div>
 
           <div v-else-if="activities.length === 0" class="text-center py-5">
-            <div class="display-4 mb-2">📭</div>
-            <p class="text-muted">No activity yet. Start by adding a reminder!</p>
+            <div class="p-4 bg-light rounded-circle d-inline-block mb-3">
+               <InboxIcon size="48" class="text-muted opacity-50" />
+            </div>
+            <p class="text-muted fw-semibold">No activity yet. Your actions will appear here!</p>
           </div>
 
           <BListGroup v-else flush>
-            <BListGroupItem v-for="activity in activities" :key="activity.id" class="py-3 px-0 border-light bg-transparent">
+            <BListGroupItem v-for="activity in activities" :key="activity.id" class="py-3 px-0 border-light bg-transparent transition-all">
               <div class="d-flex align-items-center">
-                <div class="p-3 rounded-circle bg-surface-secondary me-3 fs-5 lh-1 border">
-                  {{ activity.icon }}
+                <div class="p-3 rounded-circle bg-surface-secondary me-3 border shadow-xs d-flex align-items-center justify-content-center text-primary">
+                  <component :is="getActivityIcon(activity.description)" size="20" />
                 </div>
                 <div class="flex-grow-1">
                   <h4 class="h6 fw-bold mb-1 text-main">{{ activity.description }}</h4>
-                  <p class="text-muted small mb-0">{{ activity.created_at }}</p>
+                  <p class="text-muted xx-small mb-0 d-flex align-items-center gap-1">
+                     <ClockIcon size="12" /> {{ activity.created_at }}
+                  </p>
                 </div>
               </div>
             </BListGroupItem>
           </BListGroup>
+          <div v-if="activities.length > 5" class="text-center mt-3 pt-3 border-top">
+             <NuxtLink to="/activities" class="text-primary small fw-bold text-decoration-none">View older activities</NuxtLink>
+          </div>
         </BCard>
       </BCol>
 
       <BCol lg="4">
         <BCard variant="primary" bg-variant="primary" text-variant="white" class="mb-4 border-0 shadow gradient-bg">
-          <h3 class="h5 fw-bold mb-4">Quick Links</h3>
-          <div class="d-grid gap-2">
-            <NuxtLink to="/reminders" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              🔔 Reminders <span>›</span>
+          <h3 class="h5 fw-bold mb-4 d-flex align-items-center gap-2">
+             <ZapIcon size="24" />
+             <span>Quick Links</span>
+          </h3>
+          <div class="d-grid gap-3">
+            <NuxtLink to="/reminders" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <BellIcon size="18" />
+                 <span>Reminders</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
-            <NuxtLink to="/documents" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              📄 Documents <span>›</span>
+            <NuxtLink to="/documents" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <FileTextIcon size="18" />
+                 <span>Documents</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
-            <NuxtLink to="/medicines" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              💊 Medicines <span>›</span>
+            <NuxtLink to="/medicines" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <PillIcon size="18" />
+                 <span>Medicines</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
-            <NuxtLink to="/bills" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              💡 Bills <span>›</span>
+            <NuxtLink to="/bills" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <CreditCardIcon size="18" />
+                 <span>Bills</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
-            <NuxtLink to="/notes" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              📋 Notes & To-Dos <span>›</span>
+            <NuxtLink to="/notes" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <ClipboardListIcon size="18" />
+                 <span>Notes & To-Dos</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
-            <NuxtLink to="/vehicles" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              🚗 Vehicles <span>›</span>
+            <NuxtLink to="/vehicles" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <CarIcon size="18" />
+                 <span>Vehicles</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
-            <NuxtLink to="/budget" class="btn btn-light text-start fw-semibold d-flex justify-content-between align-items-center shadow-sm">
-              📊 Budget <span>›</span>
+            <NuxtLink to="/budget" class="quick-link-btn">
+              <div class="d-flex align-items-center gap-2">
+                 <TrendingUpIcon size="18" />
+                 <span>Budget</span>
+              </div>
+              <ChevronRightIcon size="18" />
             </NuxtLink>
+            <NuxtLink to="/chat" class="quick-link-btn">
+               <div class="d-flex align-items-center gap-2">
+                  <MessageSquareIcon size="18" />
+                  <span>Chat Messages</span>
+               </div>
+               <ChevronRightIcon size="18" />
+             </NuxtLink>
           </div>
         </BCard>
       </BCol>
@@ -164,6 +235,36 @@
 </template>
 
 <script setup>
+import { 
+  AlertTriangle as AlertTriangleIcon,
+  Bell as BellIcon,
+  CheckCircle as CheckCircleIcon,
+  Cake as CakeIcon,
+  Heart as HeartIcon,
+  Smartphone as SmartphoneIcon,
+  Calendar as CalendarIcon,
+  Lightbulb as LightbulbIcon,
+  ShieldCheck as ShieldCheckIcon,
+  Leaf as LeafIcon,
+  Wrench as WrenchIcon,
+  Pill as PillIcon,
+  FileText as FileTextIcon,
+  AlertCircle as AlertCircleIcon,
+  Activity as ActivityIcon,
+  History as HistoryIcon,
+  Inbox as InboxIcon,
+  Clock as ClockIcon,
+  Zap as ZapIcon,
+  MessageSquare as MessageSquareIcon,
+  ChevronRight as ChevronRightIcon,
+  ClipboardList as ClipboardListIcon,
+  Car as CarIcon,
+  CreditCard as CreditCardIcon,
+  TrendingUp as TrendingUpIcon,
+  Package as PackageIcon,
+  User as UserIcon,
+  Plus as PlusIcon
+} from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 const auth = useAuthStore()
@@ -192,7 +293,7 @@ const upcomingAlerts = computed(() => {
   for (const r of upcomingReminders.value) {
     alerts.push({
       key:      `rem-${r.id}`,
-      icon:     typeIcon(r.type),
+      iconComp: typeIcon(r.type),
       title:    r.title,
       subtitle: formatDate(r.next_occurrence),
       days:     r.days_remaining,
@@ -204,7 +305,7 @@ const upcomingAlerts = computed(() => {
     if (!b.is_paid_this_month && b.days_until_due <= 7 && b.days_until_due >= 0) {
       alerts.push({
         key:      `bill-${b.id}`,
-        icon:     '💡',
+        iconComp: CreditCardIcon,
         title:    b.name,
         subtitle: `Bill due on ${ordinal(b.due_day)} of month`,
         days:     b.days_until_due,
@@ -215,13 +316,13 @@ const upcomingAlerts = computed(() => {
   // Vehicle expiries within 7 days
   for (const v of upcomingVehicles.value) {
     if (v.insurance_days !== null && v.insurance_days >= 0 && v.insurance_days <= 7) {
-      alerts.push({ key: `veh-ins-${v.id}`, icon: '🛡️', title: `${v.name} — Insurance`, subtitle: `Expires ${v.insurance_expiry}`, days: v.insurance_days })
+      alerts.push({ key: `veh-ins-${v.id}`, iconComp: ShieldCheckIcon, title: `${v.name} — Insurance`, subtitle: `Expires ${v.insurance_expiry}`, days: v.insurance_days })
     }
     if (v.puc_days !== null && v.puc_days >= 0 && v.puc_days <= 7) {
-      alerts.push({ key: `veh-puc-${v.id}`, icon: '🌿', title: `${v.name} — PUC`, subtitle: `Expires ${v.puc_expiry}`, days: v.puc_days })
+      alerts.push({ key: `veh-puc-${v.id}`, iconComp: LeafIcon, title: `${v.name} — PUC`, subtitle: `Expires ${v.puc_expiry}`, days: v.puc_days })
     }
     if (v.service_days !== null && v.service_days >= 0 && v.service_days <= 7) {
-      alerts.push({ key: `veh-svc-${v.id}`, icon: '🔧', title: `${v.name} — Service`, subtitle: `Due ${v.next_service_date}`, days: v.service_days })
+      alerts.push({ key: `veh-svc-${v.id}`, iconComp: WrenchIcon, title: `${v.name} — Service`, subtitle: `Due ${v.next_service_date}`, days: v.service_days })
     }
   }
 
@@ -230,7 +331,7 @@ const upcomingAlerts = computed(() => {
     if (m.end_date) {
       const days = Math.ceil((new Date(m.end_date) - new Date()) / 86400000)
       if (days >= 0 && days <= 7) {
-        alerts.push({ key: `med-${m.id}`, icon: '💊', title: `${m.name} — Course ending`, subtitle: `Last dose: ${formatDate(m.end_date)}`, days })
+        alerts.push({ key: `med-${m.id}`, iconComp: PillIcon, title: `${m.name} — Course ending`, subtitle: `Last dose: ${formatDate(m.end_date)}`, days })
       }
     }
   }
@@ -240,8 +341,21 @@ const upcomingAlerts = computed(() => {
 })
 
 function typeIcon(type) {
-  const icons = { birthday: '🎂', anniversary: '💍', recharge: '📱', custom: '📅' }
-  return icons[type] || '🔔'
+  const icons = { birthday: CakeIcon, anniversary: HeartIcon, recharge: SmartphoneIcon, custom: CalendarIcon }
+  return icons[type] || BellIcon
+}
+
+function getActivityIcon(desc) {
+  const d = desc.toLowerCase()
+  if (d.includes('document')) return FileTextIcon
+  if (d.includes('reminder')) return BellIcon
+  if (d.includes('bill')) return CreditCardIcon
+  if (d.includes('medicine')) return PillIcon
+  if (d.includes('vehicle')) return CarIcon
+  if (d.includes('note')) return ClipboardListIcon
+  if (d.includes('added')) return PlusIcon
+  if (d.includes('user')) return UserIcon
+  return PackageIcon
 }
 
 function ordinal(n) {
@@ -320,21 +434,55 @@ onMounted(() => {
 <style scoped>
 .fw-black { font-weight: 900; }
 .xx-small { font-size: 0.75rem; }
+.tracking-tight { letter-spacing: -0.05em; }
 .border-dashed { border-style: dashed !important; }
+
+.hover-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  background: white !important;
+}
+
+.hover-up:hover {
+  transform: translateY(-5px);
+  transition: all 0.3s ease;
+}
+
+.quick-link-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.quick-link-btn:hover {
+  background: white;
+  color: var(--bs-primary);
+  transform: translateX(5px);
+}
+
+.shadow-xs { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
 /* Urgent blinking for reminders due today */
 .urgent-reminder {
-  background-color: rgba(var(--danger-rgb, 220, 53, 69), 0.1) !important;
-  border-color: var(--danger) !important;
+  background-color: rgba(var(--danger-rgb), 0.05) !important;
+  border-color: rgba(var(--danger-rgb), 0.3) !important;
   animation: urgent-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes urgent-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(var(--danger-rgb, 220, 53, 69), 0.4);
+    box-shadow: 0 0 0 0 rgba(var(--danger-rgb, 220, 53, 69), 0.2);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(var(--danger-rgb, 220, 53, 69), 0);
+    box-shadow: 0 0 0 8px rgba(var(--danger-rgb, 220, 53, 69), 0);
   }
 }
 </style>

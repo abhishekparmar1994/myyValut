@@ -875,9 +875,73 @@ export const useChatStore = defineStore('chat', () => {
                 headers: { Authorization: `Bearer ${auth.token}` }
             })
             rooms.value = rooms.value.filter(r => String(r.id) !== String(roomId))
+            if (activeRoomId.value === roomId) activeRoomId.value = null
         } catch (err) {
             console.error('Failed to leave room', err)
             throw err
+        }
+    }
+
+    async function toggleArchive(targetId, isRoom = false) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/chat/settings/archive`, {
+                method: 'POST',
+                body: { target_id: targetId, is_room: isRoom },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            if (isRoom) {
+                const room = rooms.value.find(r => String(r.id) === String(targetId))
+                if (room) room.is_archived = data.is_archived
+            } else {
+                const user = users.value.find(u => String(u.id) === String(targetId))
+                if (user) user.is_archived = data.is_archived
+            }
+            return data.is_archived
+        } catch (err) {
+            console.error('Failed to toggle archive', err)
+        }
+    }
+
+    async function toggleFavourite(targetId, isRoom = false) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/chat/settings/favourite`, {
+                method: 'POST',
+                body: { target_id: targetId, is_room: isRoom },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            if (isRoom) {
+                const room = rooms.value.find(r => String(r.id) === String(targetId))
+                if (room) room.is_favourite = data.is_favourite
+            } else {
+                const user = users.value.find(u => String(u.id) === String(targetId))
+                if (user) user.is_favourite = data.is_favourite
+            }
+            return data.is_favourite
+        } catch (err) {
+            console.error('Failed to toggle favourite', err)
+        }
+    }
+
+    async function toggleUnread(targetId, isRoom = false, status = true) {
+        const config = useRuntimeConfig()
+        try {
+            const data = await $fetch(`${config.public.apiBase}/chat/settings/unread`, {
+                method: 'POST',
+                body: { target_id: targetId, is_room: isRoom, status },
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            if (isRoom) {
+                const room = rooms.value.find(r => String(r.id) === String(targetId))
+                if (room) room.is_unread_manual = data.is_unread_manual
+            } else {
+                const user = users.value.find(u => String(u.id) === String(targetId))
+                if (user) user.is_unread_manual = data.is_unread_manual
+            }
+            return data.is_unread_manual
+        } catch (err) {
+            console.error('Failed to toggle unread', err)
         }
     }
 
@@ -930,6 +994,9 @@ export const useChatStore = defineStore('chat', () => {
         addRoomMembers,
         removeRoomMember,
         leaveRoom,
+        toggleArchive,
+        toggleFavourite,
+        toggleUnread,
         isShaking,
         playNotificationSound,
         disconnect,

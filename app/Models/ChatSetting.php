@@ -2,36 +2,34 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class RoomMember extends Model
+class ChatSetting extends Model
 {
-    protected $table = 'room_members';
-    
+    use HasFactory;
+
     protected $fillable = [
-        'room_id',
         'user_id',
-        'role',
-        'last_read_at',
+        'target_id',
         'is_archived',
         'is_favourite',
         'is_unread_manual'
     ];
 
     protected $casts = [
-        'last_read_at' => 'datetime',
         'is_archived' => 'boolean',
         'is_favourite' => 'boolean',
         'is_unread_manual' => 'boolean'
     ];
 
-    public function room()
-    {
-        return $this->belongsTo(Room::class);
-    }
-
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function targetUser()
+    {
+        return $this->belongsTo(User::class, 'target_id');
     }
 }

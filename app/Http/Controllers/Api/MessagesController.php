@@ -226,12 +226,14 @@ class MessagesController extends Controller
                 if (!filter_var($metadata['image'], FILTER_VALIDATE_URL)) {
                     $parsedUrl = parse_url($url);
                     $baseUrl = ($parsedUrl['scheme'] ?? 'http') . '://' . ($parsedUrl['host'] ?? '');
-                    
+
                     if (strpos($metadata['image'], '//') === 0) {
                         $metadata['image'] = ($parsedUrl['scheme'] ?? 'http') . ':' . $metadata['image'];
-                    } elseif (strpos($metadata['image'], '/') === 0) {
+                    }
+                    elseif (strpos($metadata['image'], '/') === 0) {
                         $metadata['image'] = $baseUrl . $metadata['image'];
-                    } else {
+                    }
+                    else {
                         $path = isset($parsedUrl['path']) ? dirname($parsedUrl['path']) : '';
                         $metadata['image'] = $baseUrl . ($path === '/' ? '' : $path) . '/' . $metadata['image'];
                     }
@@ -244,7 +246,8 @@ class MessagesController extends Controller
             }
 
             return response()->json($metadata);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return response()->json(['url' => $url, 'success' => false, 'error' => $e->getMessage()]);
         }
     }
@@ -260,7 +263,7 @@ class MessagesController extends Controller
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // For local dev environments
         curl_setopt($ch, CURLOPT_ENCODING, ''); // Handle compressed responses
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -425,21 +428,40 @@ class MessagesController extends Controller
 
         $message->update(['is_deleted_everyone' => true]);
 
-        // Notify both participants
+        // Notify participants
         $senderId = (int)$message->sender_id;
-        $receiverId = (int)$message->receiver_id;
+        $roomId = $message->room_id;
 
-        event(new SystemNotification([
-            'type' => 'message_deleted_everyone',
-            'messageId' => $messageId,
-            'partnerId' => $receiverId
-        ], $senderId));
+        if ($roomId) {
+            $payload = [
+                'type' => 'message_deleted_everyone',
+                'messageId' => $messageId,
+                'roomId' => $roomId,
+                'senderId' => $senderId
+            ];
 
-        event(new SystemNotification([
-            'type' => 'message_deleted_everyone',
-            'messageId' => $messageId,
-            'partnerId' => $senderId
-        ], $receiverId));
+            $room = \App\Models\Room::with('members')->find($roomId);
+            foreach ($room->members as $member) {
+                event(new SystemNotification($payload, $member->id));
+            }
+        }
+        else {
+            $receiverId = (int)$message->receiver_id;
+
+            // Notify sender
+            event(new SystemNotification([
+                'type' => 'message_deleted_everyone',
+                'messageId' => $messageId,
+                'partnerId' => $receiverId
+            ], $senderId));
+
+            // Notify receiver
+            event(new SystemNotification([
+                'type' => 'message_deleted_everyone',
+                'messageId' => $messageId,
+                'partnerId' => $senderId
+            ], $receiverId));
+        }
 
         return response()->json(['status' => 'deleted_for_everyone']);
     }

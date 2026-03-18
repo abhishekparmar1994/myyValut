@@ -94,6 +94,25 @@ class AuthController extends Controller
                           ->whereColumn('sender_id', 'users.id');
                     })
                     ->where('is_deleted_everyone', false)
+                    ->whereDoesntHave('deletions', function ($q) use ($currentUserId) {
+                        $q->where('user_id', $currentUserId);
+                    })
+                    ->latest()
+                    ->limit(1)
+                ])
+                ->addSelect(['last_message_id' => \App\Models\Message::select('id')
+                    ->where(function ($q) use ($currentUserId) {
+                        $q->where('sender_id', $currentUserId)
+                          ->whereColumn('receiver_id', 'users.id');
+                    })
+                    ->orWhere(function ($q) use ($currentUserId) {
+                        $q->where('receiver_id', $currentUserId)
+                          ->whereColumn('sender_id', 'users.id');
+                    })
+                    ->where('is_deleted_everyone', false)
+                    ->whereDoesntHave('deletions', function ($q) use ($currentUserId) {
+                        $q->where('user_id', $currentUserId);
+                    })
                     ->latest()
                     ->limit(1)
                 ])
@@ -107,6 +126,9 @@ class AuthController extends Controller
                           ->whereColumn('sender_id', 'users.id');
                     })
                     ->where('is_deleted_everyone', false)
+                    ->whereDoesntHave('deletions', function ($q) use ($currentUserId) {
+                        $q->where('user_id', $currentUserId);
+                    })
                     ->latest()
                     ->limit(1)
                 ])
@@ -120,6 +142,9 @@ class AuthController extends Controller
                           ->whereColumn('sender_id', 'users.id');
                     })
                     ->where('is_deleted_everyone', false)
+                    ->whereDoesntHave('deletions', function ($q) use ($currentUserId) {
+                        $q->where('user_id', $currentUserId);
+                    })
                     ->latest()
                     ->limit(1)
                 ])

@@ -13,7 +13,47 @@ class RoomController extends Controller
 {
     public function index(Request $request)
     {
-        $rooms = $request->user()->rooms()->with(['members'])->get();
+        $userId = $request->user()->id;
+        $rooms = $request->user()->rooms()
+            ->with(['members'])
+            ->addSelect(['last_message' => \App\Models\Message::select('content')
+                ->whereColumn('room_id', 'rooms.id')
+                ->where('is_deleted_everyone', false)
+                ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->latest()
+                ->limit(1)
+            ])
+            ->addSelect(['last_message_id' => \App\Models\Message::select('id')
+                ->whereColumn('room_id', 'rooms.id')
+                ->where('is_deleted_everyone', false)
+                ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->latest()
+                ->limit(1)
+            ])
+            ->addSelect(['last_message_type' => \App\Models\Message::select('type')
+                ->whereColumn('room_id', 'rooms.id')
+                ->where('is_deleted_everyone', false)
+                ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->latest()
+                ->limit(1)
+            ])
+            ->addSelect(['last_message_time' => \App\Models\Message::select('created_at')
+                ->whereColumn('room_id', 'rooms.id')
+                ->where('is_deleted_everyone', false)
+                ->whereDoesntHave('deletions', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->latest()
+                ->limit(1)
+            ])
+            ->get();
+
         return response()->json($rooms);
     }
 

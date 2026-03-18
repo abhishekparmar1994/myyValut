@@ -326,41 +326,43 @@ export const useChatStore = defineStore('chat', () => {
                 return
             }
 
-            // PartnerId check: Is this update relevant to the contact Alice is CURRENTLY talking to?
-            const currentPartner = String(activeUserId.value)
-            const incomingPartner = String(payload.partnerId || (payload.message ? payload.message.sender_id : ''))
-            
-            if (activeUserId.value && incomingPartner === currentPartner) {
-                if (payload.type === 'reaction_updated') {
-                    console.log('[CHAT STORE] Updating reactions for msg:', payload.messageId)
-                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                    if (msg) msg.reactions = payload.reactions
-                } else if (payload.type === 'pin_updated') {
-                    pinnedMessage.value = payload.pinned
-                } else if (payload.type === 'message_deleted_everyone') {
-                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                    if (msg) msg.is_deleted_everyone = true
-                } else if (payload.type === 'message_edited') {
-                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                    if (msg) {
-                        msg.content = payload.content
+            // Global Updates: Reaction, Pin, Edit, Deletion
+            // Support both direct payload and Laravel-style nested data
+            const eventData = payload.data || payload
+            const { type, messageId, roomId, partnerId } = eventData
+
+            // 1. Update active messages list if relevant
+            const isCurrentChat = roomId 
+                ? String(roomId) === String(activeRoomId.value)
+                : String(partnerId) === String(activeUserId.value)
+
+            if (isCurrentChat) {
+                const msg = messages.value.find(m => String(m.id) === String(messageId))
+                if (msg) {
+                    if (type === 'reaction_updated') msg.reactions = eventData.reactions
+                    else if (type === 'message_deleted_everyone') msg.is_deleted_everyone = true
+                    else if (type === 'message_edited') {
+                        msg.content = eventData.content
                         msg.is_edited = true
                     }
-                    const partner = users.value.find(u => String(u.id) === String(payload.partnerId))
-                    if (partner && String(partner.last_message_id) === String(payload.messageId)) {
-                        partner.last_message = payload.content
-                    }
                 }
-            } else if (activeRoomId.value && payload.roomId && String(payload.roomId) === String(activeRoomId.value)) {
-                // Room specific updates (reactions, pins in groups)
-                if (payload.type === 'reaction_updated') {
-                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                    if (msg) msg.reactions = payload.reactions
-                } else if (payload.type === 'pin_updated') {
-                    pinnedMessage.value = payload.pinned
-                } else if (payload.type === 'message_deleted_everyone') {
-                    const msg = messages.value.find(m => String(m.id) === String(payload.messageId))
-                    if (msg) msg.is_deleted_everyone = true
+                if (type === 'pin_updated') pinnedMessage.value = eventData.pinned
+            }
+
+            // 2. Update Sidebar Previews (Last Message)
+            if (type === 'message_deleted_everyone' || type === 'message_edited') {
+                if (roomId) {
+                    const room = rooms.value.find(r => String(r.id) === String(roomId))
+                    if (room && String(room.last_message_id) === String(messageId)) {
+                        room.last_message = type === 'message_deleted_everyone' ? '🚫 This message was deleted' : eventData.content
+                        room.last_message_type = type === 'message_deleted_everyone' ? 'text' : room.last_message_type
+                    }
+                } else {
+                    const user = users.value.find(u => String(u.id) === String(partnerId))
+                    if (user && String(user.last_message_id) === String(messageId)) {
+                        user.last_message = type === 'message_deleted_everyone' ? '🚫 This message was deleted' : eventData.content
+                        user.last_message_type = type === 'message_deleted_everyone' ? 'text' : user.last_message_type
+                    }
                 }
             }
         })
@@ -517,6 +519,7 @@ export const useChatStore = defineStore('chat', () => {
                     isMe: m.sender_id == auth.user?.id,
                     is_read: m.is_read,
                     is_forwarded: m.is_forwarded,
+                    is_deleted_everyone: m.is_deleted_everyone,
                     link_metadata: meta,
                     reactions: m.reactions || [],
                     reply_to: m.reply_to || null,
@@ -569,6 +572,7 @@ export const useChatStore = defineStore('chat', () => {
                 isMe: m.sender_id == auth.user?.id,
                 is_read: m.is_read,
                 is_forwarded: m.is_forwarded,
+                is_deleted_everyone: m.is_deleted_everyone,
                 link_metadata: m.link_metadata || null,
                 reactions: m.reactions || [],
                 reply_to: m.reply_to || null,
@@ -628,10 +632,40 @@ export const useChatStore = defineStore('chat', () => {
             if (type === 'me') {
                 // Remove from local list
                 messages.value = messages.value.filter(m => String(m.id) !== String(messageId))
+                
+                // Also update sidebar preview if this was the last message
+                const targetId = activeRoomId.value || activeUserId.value
+                if (activeRoomId.value) {
+                    const room = rooms.value.find(r => String(r.id) === String(activeRoomId.value))
+                    if (room && String(room.last_message_id) === String(messageId)) {
+                        room.last_message = 'Message deleted'
+                        room.last_message_type = 'text'
+                    }
+                } else if (activeUserId.value) {
+                    const user = users.value.find(u => String(u.id) === String(activeUserId.value))
+                    if (user && String(user.last_message_id) === String(messageId)) {
+                        user.last_message = 'Message deleted'
+                        user.last_message_type = 'text'
+                    }
+                }
             } else {
                 // Mark as deleted for everyone locally
                 const msg = messages.value.find(m => String(m.id) === String(messageId))
                 if (msg) msg.is_deleted_everyone = true
+                
+                // Also update sidebar preview locally
+                const targetId = activeRoomId.value || activeUserId.value
+                if (activeRoomId.value) {
+                    const room = rooms.value.find(r => String(r.id) === String(activeRoomId.value))
+                    if (room && String(room.last_message_id) === String(messageId)) {
+                        room.last_message = '🚫 This message was deleted'
+                    }
+                } else if (activeUserId.value) {
+                    const user = users.value.find(u => String(u.id) === String(activeUserId.value))
+                    if (user && String(user.last_message_id) === String(messageId)) {
+                        user.last_message = '🚫 This message was deleted'
+                    }
+                }
             }
             return res.status
         } catch (err) {
@@ -768,6 +802,7 @@ export const useChatStore = defineStore('chat', () => {
             const room = rooms.value.find(r => String(r.id) === String(id))
             if (room) {
                 room.last_message = message.content
+                room.last_message_id = message.id
                 room.last_message_type = message.type
                 room.last_message_time = message.timestamp || message.created_at
             }
@@ -775,6 +810,7 @@ export const useChatStore = defineStore('chat', () => {
             const user = users.value.find(u => String(u.id) === String(id))
             if (user) {
                 user.last_message = message.content
+                user.last_message_id = message.id
                 user.last_message_type = message.type
                 user.last_message_time = message.timestamp || message.created_at
             }

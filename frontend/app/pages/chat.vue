@@ -555,7 +555,7 @@
             </template>
           </div>
           <!-- Input Area -->
-          <div class="p-4 bg-white border-top">
+          <div class="p-3 p-md-4 input-area-premium">
               <div v-if="blockStatus.is_blocked" class="text-center p-3 rounded-3 bg-light border dashed">
                 <span class="text-muted small fw-bold">
                    <span v-if="blockStatus.blocked_by_me">You have blocked this user. Unblock them to send messages.</span>
@@ -633,7 +633,7 @@
   </BContainer>
 
   <!-- Document Preview Modal -->
-  <BModal v-model="showPreview" :title="previewName" size="xl" hide-footer centered body-class="p-0 overflow-hidden">
+  <BModal v-model="showPreview" :title="previewName" size="xl" :hide-footer="true" centered body-class="p-0 overflow-hidden">
     <div class="preview-body bg-light d-flex align-items-center justify-content-center" style="min-height: 80vh;">
       <div v-if="previewLoading" class="text-center p-5">
         <BSpinner variant="primary" style="width: 3rem; height: 3rem;" />
@@ -716,7 +716,7 @@
     @camera="toggleVideo"
   />
 
-  <BModal v-model="showIncomingCall" title="Incoming Call" centered hide-footer no-close-on-backdrop>
+  <BModal v-model="showIncomingCall" title="Incoming Call" centered :hide-footer="true" no-close-on-backdrop>
     <div class="text-center p-4">
       <BAvatar size="5rem" variant="info" :text="incomingCallerName?.charAt(0) || 'U'" class="mb-4 shadow" />
       <h4 class="fw-bold mb-2">{{ incomingCallerName }}</h4>
@@ -733,7 +733,8 @@
     </div>
   </BModal>
 
-  <BModal v-model="showUserInfoModal" title="User Information" centered hide-footer header-bg-variant="primary" header-text-variant="white">
+  <BModal v-model="showUserInfoModal" title="User Information" centered :hide-footer="true" footer-class="d-none" header-bg-variant="primary" header-text-variant="white">
+    <template #modal-footer></template>
     <div v-if="activeUser" class="text-center p-4">
       <div class="position-relative d-inline-block mb-4">
         <BAvatar 
@@ -867,7 +868,8 @@
   </BModal>
 
   <!-- Group Info Modal (For all members) -->
-  <BModal v-model="showRoomInfoModal" title="Group Info" centered hide-footer scrollable>
+  <BModal v-model="showRoomInfoModal" title="Group Info" centered :hide-footer="true" footer-class="d-none" scrollable>
+    <template #modal-footer></template>
     <div v-if="activeRoom" class="p-3">
       <div class="text-center mb-4">
         <BAvatar :text="activeRoom.name.charAt(0)" variant="primary" size="6rem" class="shadow mb-3" />
@@ -951,7 +953,7 @@
   </BModal>
 
   <!-- Screen Share Initiation Modal (Initiator) -->
-  <BModal v-model="showScreenShareInvite" title="Secure Screen Sharing" centered hide-footer no-close-on-backdrop>
+  <BModal v-model="showScreenShareInvite" title="Secure Screen Sharing" centered :hide-footer="true" no-close-on-backdrop>
     <div class="text-center p-4">
       <div class="display-1 mb-3">🖥️</div>
       <h5 class="fw-bold mb-3">Your Screen Sharing Session is Ready</h5>
@@ -969,7 +971,7 @@
   </BModal>
 
   <!-- Screen Share Join Modal (Receiver) -->
-  <BModal v-model="showScreenShareJoin" title="Join Screen Share" centered hide-footer no-close-on-backdrop>
+  <BModal v-model="showScreenShareJoin" title="Join Screen Share" centered :hide-footer="true" no-close-on-backdrop>
     <div class="p-4">
       <div class="text-center mb-4">
         <div class="display-4 mb-2">🖥️</div>
@@ -995,7 +997,7 @@
   </BModal>
   
   <!-- Vault Encryption Modal -->
-  <BModal v-model="showVaultModal" title="Message Vault" hide-footer centered header-bg-variant="primary" header-text-variant="white">
+  <BModal v-model="showVaultModal" title="Message Vault" :hide-footer="true" footer-class="d-none" centered header-bg-variant="primary" header-text-variant="white">
     <div class="p-3 text-center">
       <div class="mb-4">
         <div class="bg-primary-subtle rounded-circle d-inline-flex p-4 mb-3">
@@ -1095,7 +1097,7 @@
   </BModal>
 
   <!-- Forward Message Modal -->
-  <BModal v-model="showForwardModal" title="Forward Message" hide-footer centered>
+  <BModal v-model="showForwardModal" title="Forward Message" :hide-footer="true" centered>
     <div class="p-3">
       <BFormInput 
         v-model="forwardSearch" 
@@ -2316,10 +2318,11 @@ watch(filteredMessages, () => {
 
 <style scoped>
 .chat-container {
-    height: calc(100vh - 72px); /* Navbar height approx 72px */
+    height: calc(100vh - 72px); 
     max-height: calc(100vh - 72px);
     overflow: hidden;
-    background: #ffffff;
+    background: #f1f5f9;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05); /* Inset shade for corners */
 }
 
 @media (max-width: 767.98px) {
@@ -2339,6 +2342,13 @@ watch(filteredMessages, () => {
     height: 100%;
     background: #ffffff;
     margin: 0;
+    box-shadow: 0 0 30px rgba(0,0,0,0.04);
+}
+
+.input-area-premium {
+    background: #ffffff;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 -5px 15px rgba(0,0,0,0.02);
 }
 
 .user-item:hover {

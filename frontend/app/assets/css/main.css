@@ -54,36 +54,6 @@ body {
 
 /* --- Theme Implementations --- */
 
-.theme-dark {
-  --bg-app: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-surface-secondary: #334155;
-  --bg-surface-tertiary: #475569;
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --border-color: #334155;
-  --navbar-bg: #1e293b;
-  --navbar-text: #f1f5f9;
-  --card-bg: #1e293b;
-  --input-bg: #0f172a;
-  --input-border: #334155;
-  --input-text: #f1f5f9;
-  --msg-them-bg: #334155;
-  --msg-them-text: #f1f5f9;
-  --primary: #38bdf8;
-  --primary-rgb: 56, 189, 248;
-  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.4);
-}
-
-.theme-vibrant {
-  --bg-app: #fff1f2;
-  --bg-surface: #ffffff;
-  --bg-surface-secondary: #fff5f5;
-  --primary: #e11d48;
-  --primary-rgb: 225, 29, 72;
-  --border-color: #ffe4e6;
-  --shadow-lg: 0 10px 15px -3px rgba(225,29,72,0.15);
-}
 
 .theme-glass {
   --bg-app: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
@@ -92,117 +62,7 @@ body {
   --border-color: rgba(255, 255, 255, 0.5);
 }
 
-.theme-ocean {
-  --bg-app: #f0f9ff;
-  --primary: #0284c7;
-  --primary-rgb: 2, 132, 199;
-  --bg-surface: #ffffff;
-}
 
-.theme-forest {
-  --bg-app: #f0fdf4;
-  --primary: #15803d;
-  --primary-rgb: 21, 128, 61;
-  --bg-surface: #ffffff;
-}
-
-.theme-midnight {
-  --bg-app: #030712;
-  --bg-surface: #111827;
-  --bg-surface-secondary: #1f2937;
-  --bg-surface-tertiary: #374151;
-  --text-main: #f9fafb;
-  --text-muted: #9ca3af;
-  --border-color: #374151;
-  --navbar-bg: #030712;
-  --card-bg: #111827;
-  --input-bg: #030712;
-  --input-border: #374151;
-  --input-text: #f9fafb;
-  --msg-them-bg: #1f2937;
-  --msg-them-text: #f9fafb;
-  --primary: #818cf8;
-  --primary-rgb: 129, 140, 248;
-  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.6);
-}
-
-/* --- ChatVibe Premium Theme (Clone) --- */
-.theme-chatvibe {
-  --bg-app: #f2f5fa;
-  --bg-surface: #ffffff;
-  --bg-surface-secondary: #f8f9fc;
-  --bg-surface-tertiary: #eaecf4;
-  --text-main: #2e384d;
-  --text-muted: #707a89;
-  --border-color: #e3e6f0;
-  --navbar-bg: #3b71ed;
-  --navbar-text: #ffffff;
-  --card-bg: #ffffff;
-  --primary: #3b71ed;
-  --primary-rgb: 59, 113, 237;
-  --input-bg: #f8f9fc;
-  --input-text: #2e384d;
-  
-  /* Message Bubbles */
-  --msg-me-bg: #3b71ed;
-  --msg-me-text: #ffffff;
-  --msg-them-bg: #ffffff;
-  --msg-them-text: #2e384d;
-  
-  --radius-xl: 1rem;
-  --radius-lg: 0.75rem;
-  --shadow-lg: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
-}
-
-.theme-chatvibe .navbar {
-  background: var(--primary) !important;
-}
-
-.theme-chatvibe .navbar-brand, .theme-chatvibe .nav-link {
-  color: white !important;
-}
-
-.theme-chatvibe .chat-wrapper {
-  background: white;
-  border-radius: 0;
-  box-shadow: none !important;
-  border: none !important;
-}
-
-.theme-chatvibe .message-me {
-  border-radius: 12px 12px 0px 12px !important;
-  box-shadow: 0 4px 15px rgba(59, 113, 237, 0.2);
-}
-
-.theme-chatvibe .message-them {
-  border-radius: 12px 12px 12px 0px !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-.theme-chatvibe .user-item.active {
-  background: var(--bg-surface-secondary);
-  border-left: 4px solid var(--primary);
-}
-
-.theme-chatvibe .chat-sidebar-tabs button {
-  border: none !important;
-  background: transparent !important;
-  color: var(--text-muted) !important;
-  border-bottom: 2px solid transparent !important;
-  border-radius: 0 !important;
-  font-weight: 500 !important;
-}
-
-.theme-chatvibe .chat-sidebar-tabs button.active {
-  color: var(--primary) !important;
-  border-bottom: 2px solid var(--primary) !important;
-}
-
-.theme-chatvibe .user-item {
-  border-radius: 0 !important;
-  margin-bottom: 0 !important;
-  border-bottom: 1px solid var(--border-color) !important;
-}
 
 /* Contrast Fixes for Sidebar */
 .user-item {
@@ -339,3 +199,17 @@ body {
 /* Unknown properties fix for lints */
 .border-inline-start { border-inline-start: 1px solid var(--border-color) !important; }
 .border-inline-end { border-inline-end: 1px solid var(--border-color) !important; }
+
+@media (max-width: 767.98px) {
+  .rounded-md-4 {
+    border-radius: 0 !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .rounded-md-4 {
+    border-radius: var(--radius-xl) !important;
+  }
+}
+
+.nuxt-loading-indicator { display: none !important; opacity: 0; pointer-events: none; }

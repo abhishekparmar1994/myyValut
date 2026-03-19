@@ -7,7 +7,7 @@
           <span>MyVault</span>
         </BNavbarBrand>
 
-        <BNavbarToggle target="nav-collapse" class="border-0 ms-2" />
+        <BNavbarToggle target="nav-collapse" class="border-0 ms-2 d-lg-none" />
 
         <BCollapse id="nav-collapse" is-nav>
           <BNavbarNav class="ms-auto align-items-center gap-1">
@@ -16,11 +16,20 @@
               <BButton as="NuxtLink" to="/register" variant="primary" size="sm" class="px-4 fw-bold rounded-pill shadow-sm ms-2">Register</BButton>
             </template>
             <template v-else>
-              <NuxtLink to="/home" class="nav-link px-3 fw-semibold d-flex align-items-center gap-2 hover-primary h-100">
+              <NuxtLink to="/home" class="nav-link px-3 fw-semibold d-none d-lg-flex align-items-center gap-2 hover-primary h-100">
                  <LayoutDashboardIcon size="18" />
                  <span class="lh-1">Dashboard</span>
               </NuxtLink>
-              <BNavItemDropdown right class="me-2 fw-semibold d-flex align-items-center">
+
+              <NuxtLink to="/chat" class="nav-link px-3 fw-semibold d-none d-lg-flex align-items-center gap-2 hover-primary h-100 position-relative text-decoration-none">
+                 <MessageSquareIcon size="18" />
+                 <span class="lh-1 me-1">Chat</span>
+                 <BBadge v-if="chat.totalUnreadCount > 0" variant="danger" pill class="extra-small-badge shadow-sm">
+                   {{ chat.totalUnreadCount }}
+                 </BBadge>
+                 <div v-else class="heartbeat"></div>
+              </NuxtLink>
+              <BNavItemDropdown right class="me-2 fw-semibold d-none d-lg-flex align-items-center">
                 <template #button-content>
                    <div class="d-flex align-items-center gap-2 lh-1">
                       <ZapIcon size="18" />
@@ -48,20 +57,9 @@
                 <BDropdownItem as="NuxtLink" to="/budget" class="d-flex align-items-center gap-2 py-2">
                    <TrendingUpIcon size="16" class="text-primary" /> <span>Budget</span>
                 </BDropdownItem>
-                <BDropdownDivider />
-                <BDropdownItem as="NuxtLink" to="/chat" class="d-flex align-items-center justify-content-between py-2">
-                  <div class="d-flex align-items-center gap-2">
-                     <MessageSquareIcon size="16" class="text-primary" />
-                     <span>Live Chat</span>
-                  </div>
-                  <BBadge v-if="chat.totalUnreadCount > 0" variant="danger" pill class="ms-2">
-                    {{ chat.totalUnreadCount }}
-                  </BBadge>
-                  <div v-else class="heartbeat ms-2"></div>
-                </BDropdownItem>
               </BNavItemDropdown>
 
-              <NuxtLink to="/notifications" class="nav-link px-3 position-relative text-muted hover-primary me-2 d-flex align-items-center h-100">
+              <NuxtLink to="/notifications" class="nav-link px-3 position-relative hover-primary me-2 d-none d-lg-flex align-items-center h-100">
                 <BellIcon size="20" />
                 <BBadge v-if="notificationStore.unreadCount > 0" variant="danger" pill class="position-absolute top-0 start-100 translate-middle-x badge-overlap">
                   {{ notificationStore.unreadCount > 99 ? '99+' : notificationStore.unreadCount }}
@@ -155,10 +153,24 @@ onMounted(() => {
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
   .hover-primary:hover { color: var(--bs-primary) !important; text-decoration: none !important; }
   .transition-all { transition: all 0.2s ease-in-out; }
-  .nav-link { color: #64748b; display: flex; align-items: center; }
-  .nav-link:hover { color: var(--bs-primary) !important; }
-  .navbar-nav .nav-link { padding-top: 0 !important; padding-bottom: 0 !important; height: 100%; }
+  .nav-link { color: var(--text-muted); display: flex; align-items: center; }
+  .nav-link:hover, .nav-link.router-link-active { color: var(--bs-primary) !important; opacity: 1; }
+  .nav-link.router-link-active { position: relative; }
+  .nav-link.router-link-active::after { 
+    content: ''; 
+    position: absolute; 
+    bottom: -8px; 
+    left: 20%; 
+    right: 20%; 
+    height: 4px; 
+    background: var(--bs-primary); 
+    border-radius: 10px; 
+    box-shadow: 0 2px 4px rgba(var(--bs-primary-rgb), 0.2);
+  }
+  .navbar-nav .nav-link { padding-top: 0 !important; padding-bottom: 0 !important; height: 100%; transition: all 0.3s ease; display: flex; align-items: center; }
   .dropdown-toggle::after { vertical-align: middle !important; margin-left: 0.35rem !important; }
+  .extra-small-badge { font-size: 0.65rem; padding: 0.35em 0.55em; min-width: 1.6em; border: 1px solid white; display: inline-flex; align-items: center; justify-content: center; }
+  .heartbeat { width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 0 rgba(16, 185, 129, 0.4); animation: pulse 2s infinite; flex-shrink: 0; margin-top: 1px; }
   .profile-trigger img, .profile-trigger .b-avatar { flex-shrink: 0; }
   .lh-1 { line-height: 1 !important; }
 </style>

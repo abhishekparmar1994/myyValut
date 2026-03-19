@@ -7,7 +7,7 @@
         <div class="participants-grid w-100 h-100" :class="gridClass">
             
           <!-- Local Video (Featured or in Grid) -->
-          <div class="participant-card local-participant" :class="{ 'pip': remoteStreams.size > 0 }">
+          <div class="participant-card local-participant shadow-2xl border border-white border-opacity-10" :class="{ 'pip': remoteStreams.size > 0, 'active-speaker': isVideoEnabled }">
             <video 
               ref="localVideo" 
               autoplay 
@@ -16,67 +16,75 @@
               class="participant-video shadow-lg"
               :class="{ 'video-disabled': !isVideoEnabled }"
             ></video>
-            <div class="participant-name">You</div>
+            <div class="participant-name glass-pill">You</div>
             <div v-if="!isVideoEnabled" class="video-disabled-avatar">
-                <BAvatar variant="primary" text="Y" size="4rem" />
+                <BAvatar variant="primary" :text="auth.user?.name?.charAt(0) || 'Y'" size="5rem" class="shadow-lg border-3 border-white border-opacity-20" />
             </div>
           </div>
  
           <!-- Remote Participants -->
-          <div v-for="[userId, stream] in remoteStreams" :key="userId" class="participant-card">
+          <div v-for="[userId, stream] in remoteStreams" :key="userId" class="participant-card shadow-xl border border-white border-opacity-10">
             <RemoteVideo :stream="stream" class="participant-video" />
-            <div class="participant-name">User {{ userId.substring(0, 4) }}</div>
+            <div class="participant-name glass-pill">User {{ userId.substring(0, 4) }}</div>
           </div>
  
           <!-- Audio-only Placeholder if no streams -->
-          <div v-if="remoteStreams.size === 0 && !localStream" class="text-center text-white opacity-50 position-absolute">
-            <BAvatar size="6rem" variant="primary" :text="userName?.charAt(0) || 'U'" class="mb-3" />
-            <h4 class="fw-bold">{{ activeCallType === 'audio' ? 'Voice Call' : 'Connecting...' }}</h4>
-            <p class="small mb-0">{{ statusText }}</p>
+          <div v-if="remoteStreams.size === 0 && !localStream" class="text-center text-white position-absolute animate-fade-in">
+            <BAvatar size="8rem" variant="info" :text="userName?.charAt(0) || 'U'" class="mb-4 shadow-2xl border-4 border-white border-opacity-20 pulse-avatar" />
+            <h3 class="fw-bold mb-1">{{ activeCallType === 'audio' ? 'Voice Call' : 'Connecting...' }}</h3>
+            <p class="opacity-75 tracking-wide">{{ statusText }}</p>
           </div>
         </div>
       </div>
  
       <!-- Call Controls -->
-      <div class="p-4 bg-glass border-top border-white border-opacity-10 d-flex align-items-center justify-content-center gap-4">
+      <div class="p-4 py-5 bg-glass border-top border-white border-opacity-10 d-flex align-items-center justify-content-center gap-4">
         <BButton 
           variant="light" 
           @click="toggleMute" 
-          class="rounded-circle d-flex align-items-center justify-content-center shadow-none" 
+          class="rounded-circle d-flex align-items-center justify-content-center shadow-lg border-0 transition-all hover-scale" 
           style="width: 56px; height: 56px;"
-          :class="{ 'btn-active': isMuted }"
+          :class="{ 'btn-active bg-danger-subtle text-danger': isMuted, 'bg-white text-dark': !isMuted }"
         >
-          <span class="fs-4">{{ isMuted ? '🔇' : '🎤' }}</span>
+          <MicOffIcon v-if="isMuted" :size="24" />
+          <MicIcon v-else :size="24" />
         </BButton>
  
         <BButton 
           v-if="activeCallType === 'video'"
           variant="light" 
           @click="toggleCamera" 
-          class="rounded-circle d-flex align-items-center justify-content-center shadow-none" 
+          class="rounded-circle d-flex align-items-center justify-content-center shadow-lg border-0 transition-all hover-scale" 
           style="width: 56px; height: 56px;"
-          :class="{ 'btn-active': !isVideoEnabled }"
+          :class="{ 'btn-active bg-danger-subtle text-danger': !isVideoEnabled, 'bg-white text-dark': isVideoEnabled }"
         >
-          <span class="fs-4">{{ isVideoEnabled ? '📹' : '🚫' }}</span>
+          <VideoOffIcon v-if="!isVideoEnabled" :size="24" />
+          <VideoIcon v-else :size="24" />
         </BButton>
  
         <BButton 
           variant="danger" 
           @click="onHangup" 
-          class="rounded-circle d-flex align-items-center justify-content-center shadow-none border-0" 
-          style="width: 64px; height: 64px; background: #ef4444;"
+          class="rounded-circle d-flex align-items-center justify-content-center shadow-lg border-0 transition-all hover-bounce hangup-btn" 
+          style="width: 64px; height: 64px;"
         >
-          <span class="fs-3 text-white">📞</span>
+          <PhoneOffIcon :size="28" class="text-white" />
         </BButton>
       </div>
  
       <!-- Status Info -->
       <div class="position-absolute top-0 start-0 w-100 p-4 d-flex justify-content-between align-items-center pointer-events-none">
         <div class="d-flex align-items-center gap-3">
-          <BBadge variant="danger" class="px-2 py-1 rounded-pill blink">REC</BBadge>
+          <div class="rec-indicator d-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-black bg-opacity-50 backdrop-blur">
+            <div class="rec-dot"></div>
+            <span class="text-white fw-bold extra-small tracking-wider">LIVE</span>
+          </div>
           <div class="text-white shadow-text">
-            <h6 class="mb-0 fw-bold">{{ currentRoomId ? 'Group Call' : userName }}</h6>
-            <small class="opacity-75">{{ callDuration }}</small>
+            <h5 class="mb-0 fw-bold">{{ currentRoomId ? 'Group Call' : userName }}</h5>
+            <div class="d-flex align-items-center gap-2">
+              <div class="timer-dot"></div>
+              <small class="opacity-75 font-monospace">{{ callDuration }}</small>
+            </div>
           </div>
         </div>
       </div>
@@ -86,6 +94,16 @@
 
 <script setup>
 import { ref, watch, onMounted, computed, defineComponent, h } from 'vue'
+import { 
+  Mic as MicIcon, 
+  MicOff as MicOffIcon, 
+  Video as VideoIcon, 
+  VideoOff as VideoOffIcon, 
+  PhoneOff as PhoneOffIcon 
+} from 'lucide-vue-next'
+import { useAuthStore } from '~/stores/auth'
+
+const auth = useAuthStore()
 
 // Helper component for remote video to manage srcObject correctly in v-for
 const RemoteVideo = defineComponent({
@@ -206,52 +224,94 @@ onMounted(() => {
     object-fit: cover;
 }
 
-.participant-name {
-    position: absolute;
-    bottom: 1rem;
-    left: 1rem;
-    background: rgba(0, 0, 0, 0.5);
+.glass-pill {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: white;
-    padding: 0.2rem 0.8rem;
+    padding: 0.3rem 0.8rem;
     border-radius: 2rem;
-    font-size: 0.8rem;
-    backdrop-filter: blur(5px);
+    font-size: 0.75rem;
+    font-weight: 500;
 }
 
-.local-participant.pip {
-    position: absolute;
-    bottom: 2rem;
-    right: 2rem;
-    width: 200px;
-    height: 150px;
-    z-index: 100;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,255,255,0.1);
+.rec-indicator {
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.video-disabled-avatar {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+.rec-dot {
+    width: 8px;
+    height: 8px;
+    background: #ef4444;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #ef4444;
+    animation: pulse-red 1.5s infinite;
 }
 
-.video-disabled {
-    filter: blur(20px) brightness(0.5);
+@keyframes pulse-red {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
-.bg-glass {
-    background: rgba(255, 255, 255, 0.05);
+.timer-dot {
+    width: 6px;
+    height: 6px;
+    background: #10b981;
+    border-radius: 50%;
+}
+
+.active-speaker {
+    box-shadow: 0 0 0 4px rgba(59, 113, 237, 0.5);
+    animation: speaker-pulse 2s infinite;
+}
+
+@keyframes speaker-pulse {
+    0% { box-shadow: 0 0 0 0px rgba(59, 113, 237, 0.5); }
+    70% { box-shadow: 0 0 0 10px rgba(59, 113, 237, 0); }
+    100% { box-shadow: 0 0 0 0px rgba(59, 113, 237, 0); }
+}
+
+.pulse-avatar {
+    animation: avatar-pulse 3s infinite;
+}
+
+@keyframes avatar-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.extra-small {
+    font-size: 0.65rem;
+}
+
+.tracking-wider {
+    letter-spacing: 0.1em;
+}
+
+.backdrop-blur {
     backdrop-filter: blur(10px);
-}
-
-.btn-active {
-    background: rgba(239, 68, 68, 0.2) !important;
-    border-color: #ef4444 !important;
 }
 
 .shadow-text {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.hover-scale:hover {
+    transform: scale(1.1);
+}
+
+.hover-bounce:hover {
+    transform: translateY(-5px) scale(1.05);
+}
+
+.hangup-btn {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.transition-all {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .blink {

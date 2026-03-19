@@ -1,27 +1,16 @@
 <template>
-  <BContainer fluid class="chat-container px-md-5 py-md-3" :class="{ 'earthquake-shake': chat.isShaking }">
+  <BContainer fluid class="chat-container p-0" :class="{ 'earthquake-shake': chat.isShaking }">
     <!-- Poke Overlay -->
     <div v-if="chat.isShaking" class="poke-overlay">
        <div class="poke-text">ATTENTION!</div>
     </div>
-    <BRow class="chat-wrapper rounded-4 overflow-hidden border bg-white m-0" style="box-shadow: var(--shadow-xl); min-height: 85vh;">
+    <BRow class="chat-wrapper overflow-hidden border-top bg-white m-0" style="min-height: calc(100vh - 72px);">
       <!-- Users List -->
       <BCol :md="4" :lg="3" class="bg-surface border-end d-flex flex-column h-100" :class="{ 'd-none d-md-flex': chat.activeUserId || chat.activeRoomId }">
         <div class="p-4 border-bottom bg-surface-secondary">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <div class="d-flex align-items-center gap-2">
               <h4 class="fw-bold mb-0 text-primary">Messages</h4>
-              <BButton 
-                variant="light" 
-                size="sm" 
-                class="rounded-circle p-1 border-0 shadow-sm"
-                :class="{ 'bg-success-subtle text-success': chat.vaultKey, 'bg-warning-subtle text-warning': !chat.vaultKey }"
-                @click="showVaultModal = true"
-                v-b-tooltip.hover.bottom="chat.vaultKey ? 'Encryption Enabled' : 'Enable Encryption'"
-              >
-                <LockIcon v-if="chat.vaultKey" size="14" />
-                <UnlockIcon v-else size="14" />
-              </BButton>
             </div>
             <div class="status-indicator">
               <small class="text-muted" v-if="chat.connected">🟢 Connected</small>
@@ -79,7 +68,7 @@
           </div>
         </div>
 
-        <div class="flex-grow-1 overflow-auto p-2">
+        <div class="flex-grow-1 overflow-auto overflow-x-hidden p-2">
           
           <template v-if="sidebarMode === 'users'">
             <!-- Online Users -->
@@ -365,7 +354,7 @@
 
           <!-- Messages -->
           <div 
-             class="flex-grow-1 overflow-auto p-4 d-flex flex-column gap-3 bg-surface-secondary scroll-smooth" 
+             class="flex-grow-1 overflow-auto overflow-x-hidden p-4 d-flex flex-column gap-3 bg-surface-secondary scroll-smooth" 
              ref="messageContainer" 
              @scroll="handleScroll"
           >
@@ -1190,8 +1179,6 @@ import {
   MailOpen as MailOpenIcon,
   History as HistoryIcon,
   Heart as HeartIcon,
-  Lock as LockIcon,
-  Unlock as UnlockIcon,
   ArrowLeft as ArrowLeftIcon,
   LogOut as LogOutIcon,
   Monitor as MonitorIcon,
@@ -2329,12 +2316,10 @@ watch(filteredMessages, () => {
 
 <style scoped>
 .chat-container {
-    height: calc(100vh - 110px); /* Account for navbar + main padding */
-    max-height: calc(100vh - 110px);
+    height: calc(100vh - 72px); /* Navbar height approx 72px */
+    max-height: calc(100vh - 72px);
     overflow: hidden;
-    background: #f8fafc;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
+    background: #ffffff;
 }
 
 @media (max-width: 767.98px) {
@@ -2389,6 +2374,8 @@ watch(filteredMessages, () => {
     font-size: 0.95rem;
     line-height: 1.5;
     transition: transform 0.2s ease;
+    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 .message-me {

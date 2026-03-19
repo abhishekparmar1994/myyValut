@@ -11,22 +11,22 @@
       </BCol>
       <BCol md="4" class="text-md-end">
         <div class="d-flex gap-2 justify-content-md-end">
-          <BButton v-if="notifications.length > 0" variant="outline-primary" size="sm" @click="markAllAsRead" class="fw-bold d-flex align-items-center gap-2">
+          <BButton v-if="notificationStore.notifications.length > 0" variant="outline-primary" size="sm" @click="notificationStore.markAllAsRead" class="fw-bold d-flex align-items-center gap-2">
             <CheckIcon :size="16" /> Mark all read
           </BButton>
-          <BButton v-if="notifications.length > 0" variant="outline-danger" size="sm" @click="deleteAll" class="fw-bold d-flex align-items-center gap-2">
+          <BButton v-if="notificationStore.notifications.length > 0" variant="outline-danger" size="sm" @click="notificationStore.deleteAll" class="fw-bold d-flex align-items-center gap-2">
             <Trash2Icon :size="16" /> Clear all
           </BButton>
         </div>
       </BCol>
     </BRow>
 
-    <div v-if="loading" class="text-center py-5">
+    <div v-if="notificationStore.loading" class="text-center py-5">
       <BSpinner variant="primary" />
       <p class="text-muted mt-2">Loading alerts...</p>
     </div>
 
-    <div v-else-if="notifications.length === 0" class="text-center py-5">
+    <div v-else-if="notificationStore.notifications.length === 0" class="text-center py-5">
       <div class="mb-3 text-muted opacity-25">
         <InboxIcon :size="80" class="mx-auto" />
       </div>
@@ -35,7 +35,7 @@
     </div>
 
     <div v-else class="notification-list">
-      <BCard v-for="notif in notifications" :key="notif.id" 
+      <BCard v-for="notif in notificationStore.notifications" :key="notif.id" 
         class="mb-3 border-0 shadow-sm notification-card position-relative overflow-hidden"
         :class="{ 'unread border-start border-4 border-primary': !notif.read_at }">
         <div class="d-flex gap-3">
@@ -55,10 +55,10 @@
               </div>
               
               <div class="d-flex gap-2 ms-3">
-                <BButton v-if="!notif.read_at" size="sm" variant="link" class="p-1 px-2 text-primary hover-bg" @click="markAsRead(notif.id)" title="Mark as read">
+                <BButton v-if="!notif.read_at" size="sm" variant="link" class="p-1 px-2 text-primary hover-bg" @click="notificationStore.markAsRead(notif.id)" title="Mark as read">
                   <CheckIcon :size="18" />
                 </BButton>
-                <BButton size="sm" variant="link" class="p-1 px-2 text-danger hover-bg" @click="deleteNotif(notif.id)" title="Delete">
+                <BButton size="sm" variant="link" class="p-1 px-2 text-danger hover-bg" @click="notificationStore.deleteNotification(notif.id)" title="Delete">
                   <Trash2Icon :size="18" />
                 </BButton>
               </div>
@@ -72,20 +72,24 @@
 
 <script setup>
 import { 
-  BellIcon, InboxIcon, UsersIcon, MessageSquareIcon, 
-  ClockIcon, FileTextIcon, CircleDollarSignIcon, CheckIcon, 
-  Trash2Icon, SettingsIcon, InfoIcon, AlertTriangleIcon 
+  Bell as BellIcon, 
+  Inbox as InboxIcon, 
+  Users as UsersIcon, 
+  MessageSquare as MessageSquareIcon, 
+  Clock as ClockIcon, 
+  FileText as FileTextIcon, 
+  CircleDollarSign as CircleDollarSignIcon, 
+  Check as CheckIcon, 
+  Trash2 as Trash2Icon, 
+  Settings as SettingsIcon, 
+  Info as InfoIcon, 
+  AlertTriangle as AlertTriangleIcon 
 } from 'lucide-vue-next'
-import { useAuthStore } from '~/stores/auth'
+import { useNotificationStore } from '~/stores/notification'
 
 definePageMeta({ middleware: 'auth' })
 
-const config = useRuntimeConfig()
-const auth = useAuthStore()
-const { show: showToast } = useToast()
-
-const notifications = ref([])
-const loading = ref(true)
+const notificationStore = useNotificationStore()
 
 function getIconData(type) {
   const iconMap = {
@@ -100,6 +104,7 @@ function getIconData(type) {
 }
 
 function formatTime(d) {
+  if (!d) return ''
   return new Date(d).toLocaleString('en-IN', { 
     day: 'numeric', month: 'short', 
     hour: '2-digit', minute: '2-digit', 
@@ -107,69 +112,9 @@ function formatTime(d) {
   })
 }
 
-function authHeaders() { return { Authorization: `Bearer ${auth.token}` } }
-
-async function fetchNotifications() {
-  loading.value = true
-  try {
-    notifications.value = await $fetch(`${config.public.apiBase}/notifications`, { headers: authHeaders() })
-  } catch (e) {
-    console.error(e)
-    showToast('Failed to load notifications.', { variant: 'danger' })
-  } finally {
-    loading.value = false
-  }
-}
-
-async function markAsRead(id) {
-  try {
-    await $fetch(`${config.public.apiBase}/notifications/${id}/read`, { 
-      method: 'POST', headers: authHeaders() 
-    })
-    const n = notifications.value.find(x => x.id === id)
-    if (n) n.read_at = new Date().toISOString()
-  } catch (e) {
-    showToast('Failed to mark as read.', { variant: 'danger' })
-  }
-}
-
-async function markAllAsRead() {
-  try {
-    await $fetch(`${config.public.apiBase}/notifications/read-all`, { 
-      method: 'POST', headers: authHeaders() 
-    })
-    notifications.value.forEach(n => { if (!n.read_at) n.read_at = new Date().toISOString() })
-    showToast('All marked as read.', { variant: 'success' })
-  } catch (e) {
-    showToast('Action failed.', { variant: 'danger' })
-  }
-}
-
-async function deleteNotif(id) {
-  try {
-    await $fetch(`${config.public.apiBase}/notifications/${id}`, { 
-      method: 'DELETE', headers: authHeaders() 
-    })
-    notifications.value = notifications.value.filter(n => n.id !== id)
-  } catch (e) {
-    showToast('Failed to delete alert.', { variant: 'danger' })
-  }
-}
-
-async function deleteAll() {
-  if (!confirm('Clear all notifications permanently?')) return
-  try {
-    await $fetch(`${config.public.apiBase}/notifications`, { 
-      method: 'DELETE', headers: authHeaders() 
-    })
-    notifications.value = []
-    showToast('Notifications cleared.', { variant: 'success' })
-  } catch (e) {
-    showToast('Failed to clear all.', { variant: 'danger' })
-  }
-}
-
-onMounted(fetchNotifications)
+onMounted(() => {
+  notificationStore.fetchNotifications(1)
+})
 </script>
 
 <style scoped>

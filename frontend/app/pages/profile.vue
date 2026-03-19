@@ -9,11 +9,6 @@
           <p class="text-muted mb-0">Manage your personal information and account settings</p>
         </div>
       </BCol>
-      <BCol md="4" class="text-md-end">
-        <BButton variant="outline-danger" @click="handleLogout" class="fw-bold d-flex align-items-center justify-content-center gap-2 w-100 w-md-auto ms-auto">
-          <LogOutIcon :size="18" /> Logout
-        </BButton>
-      </BCol>
     </BRow>
 
     <div v-if="loading" class="text-center py-5">
@@ -97,7 +92,7 @@
       <!-- Right: Settings & Forms -->
       <BCol lg="8">
         <!-- Edit Details -->
-        <BCard class="border-0 shadow-sm mb-4 overflow-hidden">
+        <BCard class="border-0 shadow-sm mb-4 overflow-hidden position-relative">
           <template #header>
             <div class="py-1 fw-bold d-flex align-items-center gap-2">
               <PencilIcon :size="18" class="text-primary" /> Edit Personal Details
@@ -137,17 +132,19 @@
               </BCol>
             </BRow>
             <div class="text-end">
-              <BButton type="submit" variant="primary" :disabled="savingProfile" class="fw-bold px-4 d-inline-flex align-items-center gap-2">
-                <CheckCircleIcon v-if="!savingProfile" :size="18" />
-                <BSpinner v-else small />
-                {{ savingProfile ? 'Saving...' : 'Save Changes' }}
+              <BButton type="submit" variant="primary" :disabled="savingProfile" class="fw-bold px-4 transition-all">
+                <div class="d-flex align-items-center gap-2">
+                  <CheckCircleIcon v-if="!savingProfile" :size="18" />
+                  <BSpinner v-else small />
+                  <span>{{ savingProfile ? 'Saving...' : 'Save Changes' }}</span>
+                </div>
               </BButton>
             </div>
           </BForm>
         </BCard>
 
         <!-- Security -->
-        <BCard class="border-0 shadow-sm mb-4 overflow-hidden">
+        <BCard class="border-0 shadow-sm mb-4 overflow-hidden position-relative">
           <template #header>
             <div class="py-1 fw-bold d-flex align-items-center gap-2">
               <LockIcon :size="18" class="text-primary" /> Change Password
@@ -170,10 +167,12 @@
               </BCol>
             </BRow>
             <div class="text-end">
-              <BButton type="submit" variant="dark" :disabled="savingPw" class="fw-bold px-4 d-inline-flex align-items-center gap-2">
-                <LockIcon v-if="!savingPw" :size="18" />
-                <BSpinner v-else small />
-                {{ savingPw ? 'Updating...' : 'Change Password' }}
+              <BButton type="submit" variant="dark" :disabled="savingPw" class="fw-bold px-4 transition-all">
+                <div class="d-flex align-items-center gap-2">
+                  <LockIcon v-if="!savingPw" :size="18" />
+                  <BSpinner v-else small />
+                  <span>{{ savingPw ? 'Updating...' : 'Change Password' }}</span>
+                </div>
               </BButton>
             </div>
           </BForm>
@@ -239,13 +238,7 @@ const uploadingImage = ref(false)
 
 const themeOptions = [
   { id: 'light', name: 'Light', color: '#0d6efd' },
-  { id: 'dark', name: 'Dark', color: '#1e293b' },
-  { id: 'vibrant', name: 'Vibrant', color: '#e11d48' },
   { id: 'glass', name: 'Glass', color: 'rgba(255,255,255,0.5)' },
-  { id: 'ocean', name: 'Ocean', color: '#0284c7' },
-  { id: 'forest', name: 'Forest', color: '#15803d' },
-  { id: 'midnight', name: 'Midnight', color: '#6366f1' },
-  { id: 'chatvibe', name: 'ChatVibe', color: '#3b71ed' },
 ]
 
 const headers = computed(() => ({ Authorization: `Bearer ${auth.token}` }))
@@ -353,33 +346,37 @@ function applyThemeGlobally(themeId) {
   if (themeId && themeId !== 'light') body.classList.add(`theme-${themeId}`)
 }
 
-function handleLogout() {
-  if (confirm('Are you sure you want to logout?')) {
-    auth.logout()
-    navigateTo('/login')
-  }
-}
 
 onMounted(fetchProfile)
 </script>
 
 <style scoped>
-.text-main { color: #2c3338; }
+.text-main { color: var(--text-main); }
+.text-muted { color: var(--text-muted) !important; }
 .detail-icon {
   width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--bg-surface-secondary) !important;
+  color: var(--primary) !important;
 }
 .theme-card {
   transition: all 0.2s ease;
-  border: 2px solid transparent;
+  border: 2px solid var(--border-color);
+  background: var(--bg-surface);
 }
 .theme-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: var(--primary);
 }
 .transition-all { transition: all 0.3s ease; }
 .cursor-pointer { cursor: pointer; }
+
+.theme-card.active {
+  border-color: var(--primary) !important;
+  background: rgba(var(--primary-rgb), 0.1) !important;
+}
 </style>

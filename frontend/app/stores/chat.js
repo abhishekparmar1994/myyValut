@@ -100,7 +100,7 @@ export const useChatStore = defineStore('chat', () => {
             console.log('Connected to chat server')
         })
 
-        socket.value.on('block.updated', (payload) => {
+        socket.value.on('block_updated', (payload) => {
             // Signal a refresh might be needed for components watching this
             // We can just trigger fetchBlockedUsers to be safe, though it's the other way
             console.log('Block status updated by another user', payload)

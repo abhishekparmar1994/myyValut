@@ -80,8 +80,15 @@ subscriber.on('pmessage', (pattern, channel, message) => {
     const originalEvent = data.event;
     const payload = data.data;
 
-    // Clean up event name
-    let event = originalEvent.includes('.') ? originalEvent.split('.').pop() : originalEvent;
+    // Clean up event name (Protect specific names before popping namespaces)
+    let event = originalEvent;
+    if (originalEvent === 'block.updated' || originalEvent === 'block_updated') {
+        event = 'block_updated';
+    } else if (originalEvent.includes('\\')) {
+        event = originalEvent.split('\\').pop();
+    } else if (originalEvent.includes('.')) {
+        event = originalEvent.split('.').pop();
+    }
     
     // Normalize system.notification
     if (event === 'notification' || originalEvent === 'system.notification') {

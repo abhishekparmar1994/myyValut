@@ -12,6 +12,7 @@ export const useChatStore = defineStore('chat', () => {
     const presence = ref({})
     const typingUsers = ref({}) // { userId: timeoutId }
     const connected = ref(false)
+    const userStatus = ref('online')
     const loadingMessages = ref(false)
     const historyPage = ref(1)
     const hasMoreHistory = ref(true)
@@ -119,6 +120,11 @@ export const useChatStore = defineStore('chat', () => {
 
         socket.value.on('presence.state', (state) => {
             presence.value = { ...state }
+            // Sync status to user objects for immediate reactivity
+            Object.entries(state).forEach(([uid, status]) => {
+                const user = users.value.find(u => String(u.id) === String(uid))
+                if (user) user.status = status
+            })
         })
 
         socket.value.on('message.received', (message) => {
@@ -208,7 +214,12 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         socket.value.on('presence.update', ({ userId, status }) => {
-            presence.value = { ...presence.value, [String(userId)]: status }
+            const uid = String(userId)
+            presence.value = { ...presence.value, [uid]: status }
+            
+            // Sync to user object for immediate reactivity
+            const user = users.value.find(u => String(u.id) === uid)
+            if (user) user.status = status
         })
 
         socket.value.on('chat.typing', ({ userId }) => {
@@ -375,6 +386,15 @@ export const useChatStore = defineStore('chat', () => {
             const data = await $fetch(`${config.public.apiBase}/users`, {
                 headers: { Authorization: `Bearer ${auth.token}` }
             })
+            
+            // Re-apply known presence status so it isn't lost on refresh
+            data.forEach(u => {
+                const knownStatus = presence.value[String(u.id)]
+                if (knownStatus) {
+                    u.status = knownStatus
+                }
+            })
+            
             users.value = data
         } catch (err) {
             console.error('Failed to fetch users', err)
@@ -452,6 +472,12 @@ export const useChatStore = defineStore('chat', () => {
         if (!socket.value) return
         const eventName = roomId ? 'chat.group.typing' : 'chat.private.typing'
         socket.value.emit(eventName, { receiverId, roomId })
+    }
+
+    function sendStatus(status) {
+        if (!socket.value) return
+        userStatus.value = status
+        socket.value.emit('presence.status', { status })
     }
 
     async function fetchHistory(id, isRoom = false) {
@@ -987,6 +1013,7 @@ export const useChatStore = defineStore('chat', () => {
 
     return {
         connected,
+        userStatus,
         users,
         rooms,
         messages,
@@ -1014,6 +1041,7 @@ export const useChatStore = defineStore('chat', () => {
         fetchUnreadCounts,
         sendMessage,
         sendTyping,
+        sendStatus,
         fetchHistory,
         loadMoreHistory,
         fetchLinkMetadata,

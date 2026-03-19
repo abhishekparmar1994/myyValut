@@ -90,7 +90,7 @@
                 <BAvatar v-else variant="info" :text="user.name.charAt(0)" />
                 <span 
                   class="position-absolute bottom-0 end-0 border border-white rounded-circle" 
-                  :class="chat.presence[String(user.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
+                  :class="getStatusColor(user.status || chat.presence[String(user.id)])"
                   style="width: 12px; height: 12px;"
                 ></span>
               </div>
@@ -237,6 +237,24 @@
            </div>
         </template>
       </div>
+
+      <!-- Current User Profile at Bottom -->
+      <div class="mt-auto p-3 border-top bg-light bg-opacity-75 d-flex align-items-center gap-3">
+        <div class="position-relative">
+          <BAvatar :src="auth.profileImageUrl" :text="auth.user?.name?.charAt(0)" variant="primary" />
+          <span 
+            class="position-absolute bottom-0 end-0 border border-white rounded-circle" 
+            :class="getStatusColor(chat.userStatus)"
+            style="width: 12px; height: 12px;"
+          ></span>
+        </div>
+        <div class="flex-grow-1 overflow-hidden">
+          <h6 class="mb-0 fw-bold text-truncate text-main">{{ auth.user?.name }} (You)</h6>
+          <small :class="chat.userStatus === 'away' ? 'text-warning' : 'text-success'" class="fw-bold">
+            {{ getStatusText(chat.userStatus) }}
+          </small>
+        </div>
+      </div>
     </BCol>
 
       <!-- Chat Area -->
@@ -265,15 +283,19 @@
                   <BAvatar v-else variant="info" :text="activeUser.name?.charAt(0)" />
                   <span 
                     class="position-absolute bottom-0 end-0 border border-white rounded-circle" 
-                    :class="chat.presence[String(activeUser.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
+                    :class="getStatusColor(activeUser.status || chat.presence[String(activeUser.id)])"
                     style="width: 12px; height: 12px;"
                   ></span>
                 </div>
                 <div>
                   <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
                   <small class="text-primary fw-bold blink" v-if="chat.typingUsers[String(activeUser.id)]">typing...</small>
-                  <small class="text-success" v-else-if="chat.presence[String(activeUser.id)] === 'online'">Active Now</small>
-                  <small class="text-muted" v-else>Offline</small>
+                  <small 
+                    v-else
+                    :class="(activeUser.status || chat.presence[String(activeUser.id)]) === 'online' ? 'text-success' : ((activeUser.status || chat.presence[String(activeUser.id)]) === 'away' ? 'text-warning' : 'text-muted')"
+                  >
+                    {{ getStatusText(activeUser.status || chat.presence[String(activeUser.id)]) }}
+                  </small>
                 </div>
               </template>
             </div>
@@ -764,9 +786,9 @@
           class="shadow-lg border border-3 border-white"
         />
         <BAvatar v-else variant="info" :text="activeUser.name.charAt(0)" size="8rem" class="shadow-lg border border-3 border-white" />
-        <span   
-          class="position-absolute bottom-0 end-0 rounded-circle border border-2 border-white p-2" 
-          :class="chat.presence[String(activeUser.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
+        <span 
+          class="position-absolute bottom-0 end-0 border border-2 border-white rounded-circle" 
+          :class="getStatusColor(activeUser.status || chat.presence[String(activeUser.id)])"
           style="width: 24px; height: 24px;"
         ></span>
       </div>
@@ -777,8 +799,8 @@
       <div class="d-flex flex-column gap-2 text-start bg-light p-3 rounded-4">
         <div class="d-flex justify-content-between align-items-center">
           <span class="text-muted small">Status</span>
-          <BBadge :variant="chat.presence[String(activeUser.id)] === 'online' ? 'success' : 'secondary'" pill>
-            {{ chat.presence[String(activeUser.id)] === 'online' ? 'Online' : 'Offline' }}
+          <BBadge :variant="(activeUser.status || chat.presence[String(activeUser.id)]) === 'online' ? 'success' : ((activeUser.status || chat.presence[String(activeUser.id)]) === 'away' ? 'warning' : 'secondary')" pill>
+            {{ getStatusText(activeUser.status || chat.presence[String(activeUser.id)]) }}
           </BBadge>
         </div>
         <div class="d-flex justify-content-between align-items-center">
@@ -1199,7 +1221,7 @@
 
 <script setup>
 import { 
-  ref, onMounted, computed, watch, nextTick 
+  ref, onMounted, onUnmounted, computed, watch, nextTick 
 } from 'vue'
 import { 
   Search as SearchIcon, 
@@ -1969,7 +1991,8 @@ async function handleScroll(e) {
 const onlineUsers = computed(() => {
     return chat.users
         .filter(u => {
-            const isOnline = chat.presence[String(u.id)] === 'online' && String(u.id) !== String(auth.user?.id)
+            const status = u.status || chat.presence[String(u.id)] // Fallback to presence map if needed
+            const isOnline = ['online', 'away'].includes(status) && String(u.id) !== String(auth.user?.id)
             const matchesSearch = !userSearch.value || u.name.toLowerCase().includes(userSearch.value.toLowerCase())
             return isOnline && matchesSearch && !u.is_archived
         })
@@ -1979,7 +2002,8 @@ const onlineUsers = computed(() => {
 const offlineUsers = computed(() => {
     return chat.users
         .filter(u => {
-            const isOffline = (!chat.presence[String(u.id)] || chat.presence[String(u.id)] === 'offline') && String(u.id) !== String(auth.user?.id)
+            const status = u.status || chat.presence[String(u.id)]
+            const isOffline = (!status || status === 'offline') && String(u.id) !== String(auth.user?.id)
             const matchesSearch = !userSearch.value || u.name.toLowerCase().includes(userSearch.value.toLowerCase())
             return isOffline && matchesSearch && !u.is_archived
         })
@@ -2298,6 +2322,18 @@ function getLastMessagePreview(user) {
     return user.last_message
 }
 
+function getStatusColor(status) {
+    if (status === 'online') return 'bg-success'
+    if (status === 'away') return 'bg-warning'
+    return 'bg-secondary'
+}
+
+function getStatusText(status) {
+    if (status === 'online') return 'Active Now'
+    if (status === 'away') return 'Away'
+    return 'Offline'
+}
+
 function canEdit(msg) {
   if (msg.senderId !== auth.user?.id || msg.type !== 'text' || msg.is_deleted_everyone) return false
   const msgTime = new Date(msg.timestamp || msg.created_at).getTime()
@@ -2330,8 +2366,41 @@ async function saveEdit(messageId) {
   }
 }
 
+let activityTimeout = null
+const INACTIVITY_LIMIT = 1 * 60 * 1000 // 2 minutes
+
+function resetActivityTimer() {
+    if (chat.userStatus === 'away') {
+        chat.sendStatus('online')
+    }
+    
+    if (activityTimeout) clearTimeout(activityTimeout)
+    activityTimeout = setTimeout(() => {
+        chat.sendStatus('away')
+    }, INACTIVITY_LIMIT)
+}
+
 onMounted(() => {
     chat.init()
+    
+    // Activity tracking
+    if (import.meta.client) {
+        window.addEventListener('mousemove', resetActivityTimer)
+        window.addEventListener('keydown', resetActivityTimer)
+        window.addEventListener('click', resetActivityTimer)
+        window.addEventListener('scroll', resetActivityTimer)
+        resetActivityTimer()
+    }
+})
+
+onUnmounted(() => {
+    if (import.meta.client) {
+        window.removeEventListener('mousemove', resetActivityTimer)
+        window.removeEventListener('keydown', resetActivityTimer)
+        window.removeEventListener('click', resetActivityTimer)
+        window.removeEventListener('scroll', resetActivityTimer)
+        if (activityTimeout) clearTimeout(activityTimeout)
+    }
 })
 
 // Auto-refresh user list if a new user connects

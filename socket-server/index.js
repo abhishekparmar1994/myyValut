@@ -30,6 +30,8 @@ subscriber.on('error', (err) => console.error('Redis Subscriber: Error', err));
 
 // Store online users: userId -> Set of socket IDs
 const onlineUsers = new Map(); 
+// Store user status: userId -> 'online' | 'away'
+const userStatuses = new Map();
 // Track disconnect timeouts: userId -> timeoutId
 const disconnectTimeouts = new Map();
 
@@ -113,6 +115,7 @@ io.on('connection', (socket) => {
     // Track presence
     if (!onlineUsers.has(userId)) {
         onlineUsers.set(userId, new Set());
+        userStatuses.set(userId, 'online'); // Default to online
     }
     onlineUsers.get(userId).add(socket.id);
 
@@ -148,13 +151,22 @@ io.on('connection', (socket) => {
     // Send the current online list to the new user
     const currentOnline = {};
     onlineUsers.forEach((sockets, uid) => {
-        if (sockets.size > 0) currentOnline[uid] = 'online';
+        if (sockets.size > 0) currentOnline[uid] = userStatuses.get(uid) || 'online';
     });
     socket.emit('presence.state', currentOnline);
 
+    // Handle status changes (Online -> Away, etc)
+    socket.on('presence.status', ({ status }) => {
+        if (['online', 'away'].includes(status)) {
+            userStatuses.set(userId, status);
+            console.log(`[PRESENT] User ${userId} is now ${status}`);
+            io.emit('presence.update', { userId, status });
+        }
+    });
+
     // Broadcast to others that this user is online (only if it's their first active session)
     if (onlineUsers.get(userId).size === 1) {
-        io.emit('presence.update', { userId, status: 'online' });
+        io.emit('presence.update', { userId, status: userStatuses.get(userId) || 'online' });
     }
 
     // --- Private Messaging ---

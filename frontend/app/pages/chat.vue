@@ -58,13 +58,13 @@
                   {{ unreadList.length }}
                 </BBadge>
               </button>
-            <button 
+            <!-- <button 
               class="btn btn-sm flex-grow-1 rounded-pill py-2 fw-bold transition-all position-relative" 
               :class="{ 'bg-primary text-white shadow-sm active': sidebarMode === 'archived', 'text-muted': sidebarMode !== 'archived' }"
               @click="sidebarMode = 'archived'"
             >
                 Archived
-              </button>
+              </button> -->
           </div>
         </div>
 
@@ -88,7 +88,11 @@
                   variant="info" 
                 />
                 <BAvatar v-else variant="info" :text="user.name.charAt(0)" />
-                <span class="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle p-1" style="width: 12px; height: 12px;"></span>
+                <span 
+                  class="position-absolute bottom-0 end-0 border border-white rounded-circle" 
+                  :class="chat.presence[String(user.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
+                  style="width: 12px; height: 12px;"
+                ></span>
               </div>
               <div class="flex-grow-1 overflow-hidden d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-1">
@@ -184,8 +188,7 @@
           </div>
         </template>
 
-        <template v-else-if="sidebarMode === 'archived'">
-          <!-- Archived List -->
+        <!-- <template v-else-if="sidebarMode === 'archived'">
           <div v-if="archivedList.length > 0">
             <div 
               v-for="item in archivedList" 
@@ -204,7 +207,7 @@
           <div v-else class="text-center py-5 text-muted">
             <small>No archived chats</small>
           </div>
-        </template>
+        </template> -->
 
         <template v-else-if="sidebarMode === 'unread'">
            <!-- Unread Filtered List -->
@@ -253,12 +256,19 @@
                 </div>
               </template>
               <template v-else-if="activeUser">
-                <BAvatar 
-                  v-if="activeUser.profile_image"
-                  :src="getProfileImageUrl(activeUser)"
-                  variant="info" 
-                />
-                <BAvatar v-else variant="info" :text="activeUser.name?.charAt(0)" />
+                <div class="position-relative">
+                  <BAvatar 
+                    v-if="activeUser.profile_image"
+                    :src="getProfileImageUrl(activeUser)"
+                    variant="info" 
+                  />
+                  <BAvatar v-else variant="info" :text="activeUser.name?.charAt(0)" />
+                  <span 
+                    class="position-absolute bottom-0 end-0 border border-white rounded-circle" 
+                    :class="chat.presence[String(activeUser.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
+                    style="width: 12px; height: 12px;"
+                  ></span>
+                </div>
                 <div>
                   <h5 class="mb-0 fw-bold">{{ activeUser.name }}</h5>
                   <small class="text-primary fw-bold blink" v-if="chat.typingUsers[String(activeUser.id)]">typing...</small>
@@ -303,6 +313,9 @@
                   <BDropdownItem @click="showUserInfoModal = true">
                     <InfoIcon size="16" class="me-2 text-primary" /> User Info
                   </BDropdownItem>
+                  <BDropdownItem @click="handleClearChat" class="text-danger">
+                    <TrashIcon size="16" class="me-2" /> Clear Chat
+                  </BDropdownItem>
                 </template>
                 <template v-else-if="chat.activeRoomId">
                     <BDropdownItem @click="showRoomInfoModal = true">
@@ -314,6 +327,10 @@
                     <BDropdownDivider />
                     <BDropdownItem @click="handleLeaveGroup" class="text-danger">
                       <LogOutIcon size="16" class="me-2" /> Leave Group
+                    </BDropdownItem>
+                    <BDropdownDivider />
+                    <BDropdownItem @click="handleClearChat" class="text-danger">
+                      <TrashIcon size="16" class="me-2" /> Clear Chat
                     </BDropdownItem>
                 </template>
               </BDropdown>
@@ -380,7 +397,8 @@
                 </p>
               </div>
 
-              <template v-else v-for="msg in filteredMessages" :key="msg.id">
+              <TransitionGroup v-else name="chat-msg" tag="div" class="d-flex flex-column gap-3" appear>
+                <div v-for="msg in filteredMessages" :key="msg.id">
                 <!-- System/Activity Message -->
                 <div v-if="msg.type === 'system'" class="d-flex justify-content-center my-3 w-100">
                   <span class="badge bg-light text-muted border py-2 px-3 rounded-pill fw-normal shadow-sm">
@@ -442,9 +460,9 @@
                           <BDropdownItem @click="markAsUnread(msg)">
                             <MailOpenIcon size="14" class="me-2" /> Mark As Unread
                           </BDropdownItem>
-                          <BDropdownItem @click="archiveChat(msg)">
+                          <!-- <BDropdownItem @click="archiveChat(msg)">
                             <HistoryIcon size="14" class="me-2" /> Archive
-                          </BDropdownItem>
+                          </BDropdownItem> -->
                           <BDropdownItem @click="addToFavourites(msg)">
                             <HeartIcon size="14" class="me-2" /> Add To Favourites
                           </BDropdownItem>
@@ -534,7 +552,8 @@
                   </div>
                 </div>
               </div>
-            </template>
+            </div>
+          </TransitionGroup>
 
                <!-- Typing Animation (only in 1-to-1 chat when activeUser exists) -->
               <div v-if="activeUser && chat.typingUsers[String(activeUser.id)]" class="message-wrapper d-flex justify-content-start align-items-end gap-2 mt-2">
@@ -745,7 +764,7 @@
           class="shadow-lg border border-3 border-white"
         />
         <BAvatar v-else variant="info" :text="activeUser.name.charAt(0)" size="8rem" class="shadow-lg border border-3 border-white" />
-        <span 
+        <span   
           class="position-absolute bottom-0 end-0 rounded-circle border border-2 border-white p-2" 
           :class="chat.presence[String(activeUser.id)] === 'online' ? 'bg-success' : 'bg-secondary'"
           style="width: 24px; height: 24px;"
@@ -1160,6 +1179,22 @@
       </div>
     </div>
   </BModal>
+
+  <!-- Clear Chat Confirmation Modal -->
+  <BModal v-model="showClearChatModal" title="Clear History" centered :hide-footer="true" footer-class="d-none">
+    <template #modal-footer></template>
+    <div class="p-3 text-center">
+      <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-inline-flex p-3 mb-4">
+        <TrashIcon size="48" />
+      </div>
+      <h5 class="fw-bold mb-3">Clear conversation history?</h5>
+      <p class="text-muted small mb-4">All messages will be hidden for you. This action cannot be undone.</p>
+      <div class="d-flex gap-2">
+        <BButton variant="light" class="flex-grow-1 rounded-pill py-2 shadow-none" @click="showClearChatModal = false">Cancel</BButton>
+        <BButton variant="danger" class="flex-grow-1 rounded-pill py-2 shadow-sm fw-bold" @click="confirmClearChat">Clear All</BButton>
+      </div>
+    </div>
+  </BModal>
 </template>
 
 <script setup>
@@ -1220,7 +1255,7 @@ definePageMeta({ middleware: 'auth' })
 const chat = useChatStore()
 const auth = useAuthStore()
 const config = useRuntimeConfig()
-const { show: showToast } = useToast()
+const { create: showToast } = useToast()
 
 const sidebarMode = ref('users') // 'users', 'groups', 'unread'
 const showNewGroupModal = ref(false)
@@ -1408,7 +1443,7 @@ const markAsUnread = async () => {
     })
 }
 
-const archiveChat = async () => {
+/* const archiveChat = async () => {
     const isRoom = !!chat.activeRoomId
     const targetId = chat.activeRoomId || chat.activeUserId
     if (!targetId) return
@@ -1425,7 +1460,7 @@ const archiveChat = async () => {
         activeUser.value = null
         chat.activeRoomId = null
     }
-}
+} */
 
 const addToFavourites = async () => {
     const isRoom = !!chat.activeRoomId
@@ -1456,6 +1491,7 @@ const editingLoading = ref(false)
 
 // Group Call State
 const showGroupInviteModal = ref(false)
+const showClearChatModal = ref(false)
 const showIncomingGroupCall = ref(false)
 const selectedGroupUsers = ref([])
 const groupCallRoomId = ref('')
@@ -2314,6 +2350,27 @@ watch(filteredMessages, () => {
         chat.sendRead(activeUser.value.id)
     }
 }, { deep: true })
+
+const handleClearChat = () => {
+    showClearChatModal.value = true
+}
+
+const confirmClearChat = async () => {
+    const isRoom = !!chat.activeRoomId
+    const targetId = chat.activeRoomId || chat.activeUserId
+    if (!targetId) return
+    
+    try {
+        console.log('[CHAT] Starting clear messages for:', targetId, isRoom)
+        await chat.clearMessages(targetId, isRoom)
+        console.log('[CHAT] Clear messages API call successful')
+        showClearChatModal.value = false
+        showToast({ title: 'Success', body: 'Chat cleared successfully', variant: 'success' })
+    } catch (err) {
+        console.error('[CHAT] Error in confirmClearChat:', err)
+        showToast({ title: 'Error', body: 'Failed to clear chat', variant: 'danger' })
+    }
+}
 </script>
 
 <style scoped>
@@ -2343,6 +2400,7 @@ watch(filteredMessages, () => {
     background: #ffffff;
     margin: 0;
     box-shadow: 0 0 30px rgba(0,0,0,0.04);
+    overflow: visible !important;
 }
 
 .input-area-premium {
@@ -2675,5 +2733,38 @@ watch(filteredMessages, () => {
 
 .whatsapp-btn:active {
   transform: scale(0.98);
+}
+
+/* Professional Message Animations */
+@keyframes message-appear {
+  0% { 
+    opacity: 0; 
+    transform: translateY(40px) scale(0.85); 
+    filter: blur(4px);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+    filter: blur(0);
+  }
+}
+
+.chat-msg-enter-active {
+  animation: message-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.chat-msg-move {
+  transition: transform 0.5s ease;
+}
+
+/* Avatar Bounce */
+.chat-msg-enter-active .b-avatar {
+  animation: avatar-bounce 0.5s ease;
+}
+
+@keyframes avatar-bounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 </style>

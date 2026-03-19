@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messages/read/{senderId}', [MessagesController::class , 'markAsRead']);
     Route::post('/messages/react/{messageId}', [MessagesController::class , 'toggleReaction']);
     Route::post('/messages/pin/{messageId}', [MessagesController::class , 'togglePin']);
+    Route::delete('/messages/clear/{id}', [MessagesController::class , 'clear']);
     Route::put('/messages/{messageId}', [MessagesController::class , 'editMessage']);
     Route::delete('/messages/{messageId}', [MessagesController::class , 'deleteMessage']);
     Route::get('/messages/link-metadata', [MessagesController::class , 'getLinkMetadata']);

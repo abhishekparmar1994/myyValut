@@ -87,7 +87,7 @@ export const useChatStore = defineStore('chat', () => {
         socket.value = io(config.public.socketUrl, {
             auth: { 
                 token: auth.token,
-                userId: auth.user.id 
+                userId: String(auth.user.id) 
             },
             reconnection: true,
             reconnectionAttempts: 5,
@@ -696,6 +696,41 @@ export const useChatStore = defineStore('chat', () => {
         }
     }
 
+    async function clearMessages(id, isRoom = false) {
+        const config = useRuntimeConfig()
+        const url = `${config.public.apiBase}/messages/clear/${id}?is_room=${isRoom}`
+        console.log('[CHAT] Fetching clear messages URL:', url)
+        try {
+            await $fetch(url, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${auth.token}` }
+            })
+            messages.value = []
+            
+            // Clear last message in sidebar for this user/room
+            if (isRoom) {
+                const room = rooms.value.find(r => String(r.id) === String(id))
+                if (room) {
+                    room.last_message = null
+                    room.last_message_id = null
+                    room.last_message_type = null
+                    room.last_message_time = null
+                }
+            } else {
+                const user = users.value.find(u => String(u.id) === String(id))
+                if (user) {
+                    user.last_message = null
+                    user.last_message_id = null
+                    user.last_message_type = null
+                    user.last_message_time = null
+                }
+            }
+        } catch (err) {
+            console.error('[CHAT] Failed to clear messages', err)
+            throw err
+        }
+    }
+
     async function fetchLinkMetadata(url) {
         const config = useRuntimeConfig()
         try {
@@ -986,6 +1021,7 @@ export const useChatStore = defineStore('chat', () => {
         togglePin,
         deleteMessage,
         editMessage,
+        clearMessages,
         sendRead,
         isUserBlocked,
         toggleBlock,

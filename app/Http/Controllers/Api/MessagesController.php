@@ -11,6 +11,7 @@ use App\Models\RoomMember;
 use App\Events\SystemNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Exception;
 
@@ -611,5 +612,53 @@ class MessagesController extends Controller
         event(new SystemNotification($payload, $receiverId));
 
         return response()->json(['status' => 'success', 'message' => $message]);
+    }
+
+    public function clear(Request $request, $id)
+    {
+        Log::info('[CHAT] Clearing message history for user:', ['user_id' => $request->user()->id, 'target_id' => $id, 'is_room' => $request->query('is_room')]);
+        $userId = $request->user()->id;
+        $isRoom = $request->query('is_room') === 'true';
+
+        $query = Message::query();
+        if ($isRoom) {
+            $query->where('room_id', $id);
+        }
+        else {
+            $query->where(function ($q) use ($userId, $id) {
+                $q->where(function ($sq) use ($userId, $id) {
+                        $sq->where('sender_id', $userId)->where('receiver_id', $id);
+                    }
+                    )->orWhere(function ($sq) use ($userId, $id) {
+                        $sq->where('sender_id', $id)->where('receiver_id', $userId);
+                    }
+                    );
+                })->whereNull('room_id');
+        }
+
+        $messageIds = $query->pluck('id');
+        $data = [];
+        $now = now();
+
+        foreach ($messageIds as $messageId) {
+            $data[] = [
+                'user_id' => $userId,
+                'message_id' => $messageId,
+                'created_at' => $now,
+                'updated_at' => $now
+            ];
+        }
+
+        if (!empty($data)) {
+            foreach (array_chunk($data, 500) as $chunk) {
+                \App\Models\MessageDeletion::upsert(
+                    $chunk,
+                ['user_id', 'message_id'],
+                ['updated_at']
+                );
+            }
+        }
+
+        return response()->json(['status' => 'success', 'cleared_count' => count($messageIds)]);
     }
 }

@@ -36,19 +36,24 @@ const disconnectTimeouts = new Map();
 // Authentication Middleware
 io.use((socket, next) => {
     const token = socket.handshake.auth.token || socket.handshake.headers['authorization'];
-    const userId = socket.handshake.auth.userId; 
+    const rawUserId = socket.handshake.auth.userId; 
     
     if (!token) {
+        console.error('[AUTH] Connection rejected: Token missing');
         return next(new Error('Authentication error: Token missing'));
     }
 
-    if (userId) {
-        socket.user = { id: String(userId) };
+    if (rawUserId) {
+        const userId = String(rawUserId);
+        socket.user = { id: userId };
+        console.log(`[AUTH] User ${userId} authenticated from handshake`);
         return next();
     }
 
     // Fallback for older frontend sessions or tests
-    socket.user = { id: token.substring(0, 8) }; 
+    const fallbackId = token.substring(0, 8);
+    socket.user = { id: fallbackId }; 
+    console.warn(`[AUTH] No userId in handshake, using fallback: ${fallbackId}`);
     next();
 });
 
